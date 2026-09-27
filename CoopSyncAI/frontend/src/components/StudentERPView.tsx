@@ -29,14 +29,14 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
 
   // student.py Modal State
   const [showRegisterModal, setShowRegisterModal] = useState<boolean>(false);
-  const [newStudentId, setNewStudentId] = useState<string>('5025088');
-  const [newStudentName, setNewStudentName] = useState<string>('Rahul Singh');
-  const [newRollNo, setNewRollNo] = useState<string>('2400300100305');
+  const [newStudentId, setNewStudentId] = useState<string>('');
+  const [newStudentName, setNewStudentName] = useState<string>('');
+  const [newRollNo, setNewRollNo] = useState<string>('');
   const [newGender, setNewGender] = useState<string>('Male');
-  const [newDept, setNewDept] = useState<string>('Dairy Cooperative Management');
-  const [newYear, setNewYear] = useState<string>('4th Year');
+  const [newDept, setNewDept] = useState<string>('Computer Science & Engineering');
+  const [newYear, setNewYear] = useState<string>('3rd Year');
   const [newCourse, setNewCourse] = useState<string>('B.Tech');
-  const [newSem, setNewSem] = useState<string>('Batch 2026');
+  const [newSem, setNewSem] = useState<string>('Sem 5');
   const [sampleCount, setSampleCount] = useState<number>(0);
   const [registerMsg, setRegisterMsg] = useState<string | null>(null);
 
@@ -58,11 +58,15 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newStudentId.trim() || !newStudentName.trim()) {
+      setRegisterMsg('❌ Student ID and Name are required fields.');
+      return;
+    }
     try {
       const res = await addStudentApi({
-        id: newStudentId,
-        name: newStudentName,
-        roll: newRollNo,
+        id: newStudentId.trim(),
+        name: newStudentName.trim(),
+        roll: newRollNo.trim(),
         gender: newGender,
         dept: newDept,
         year: newYear,
@@ -70,8 +74,11 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
         sem: newSem
       });
       setRegisterMsg(res.message);
-      confetti({ particleCount: 50, spread: 60 });
-      loadStudents();
+      if (res.success) {
+        confetti({ particleCount: 50, spread: 60 });
+        setSampleCount(0);
+        loadStudents(); // Refresh student list immediately
+      }
     } catch (err: any) {
       setRegisterMsg('Registration error: ' + err.message);
     }
