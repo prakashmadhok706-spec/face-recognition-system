@@ -121,3 +121,36 @@ export async function sendAIChat(query: string, userId: number = 1) {
   });
   return await res.json();
 }
+
+export async function addStudentApi(studentData: any) {
+  const res = await fetch(`${API_BASE}/students/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(studentData),
+  });
+  return await res.json();
+}
+
+export async function captureSampleApi(sampleData: any) {
+  const res = await fetch(`${API_BASE}/students/capture-sample`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sampleData),
+  });
+  return await res.json();
+}
+
+export async function trainModelApi() {
+  const res = await fetch(`${API_BASE}/train-model`, {
+    method: 'POST',
+  });
+  return await res.json();
+}
+
+export async function clearAttendanceLogsApi() {
+  const res = await fetch(`${API_BASE}/attendance/clear-logs`, {
+    method: 'POST',
+  });
+  return await res.json();
+}
+
