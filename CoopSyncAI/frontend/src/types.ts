@@ -4,12 +4,27 @@ export interface UserProfile {
   roll_number: string;
   name: string;
   email: string;
-  role: 'student' | 'trainer' | 'admin' | 'employer';
+  role: 'student' | 'trainer' | 'admin' | 'employer' | 'ncct_admin' | 'institution_admin';
   department: string;
   semester: string;
   degree?: string;
   skills: string;
   avatar: string;
+  institution?: string;
+}
+
+export interface ProgrammeItem {
+  id: number;
+  title: string;
+  start_date: string;
+  end_date: string;
+  location: string;
+  institution: string;
+  capacity: number;
+  enrolled: number;
+  hostel_available: boolean;
+  status: 'Open' | 'Closed' | 'Upcoming';
+  category: string;
 }
 
 export interface AttendanceRecord {
@@ -75,3 +90,4 @@ export interface AnalyticsData {
   department_distribution: Array<{ department: string; students: number; color: string }>;
   in_demand_skills: Array<{ skill: string; demand: number }>;
 }
+

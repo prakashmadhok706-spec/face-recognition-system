@@ -8,6 +8,7 @@ import { CoursesView } from './components/CoursesView';
 import { CertificatesView } from './components/CertificatesView';
 import { EmploymentView } from './components/EmploymentView';
 import { AIChatModal } from './components/AIChatModal';
+import { ProgrammesView } from './components/ProgrammesView';
 import { fetchHealth, fetchStudents, syncOfflineAttendance } from './api';
 import { UserProfile } from './types';
 
@@ -17,11 +18,11 @@ const DEFAULT_USERS: UserProfile[] = [
     id: 1,
     student_id: '5025088',
     roll_number: '2400300100305',
-    name: 'Puneet',
-    email: 'puneet@coopsync.edu',
+    name: 'Rahul Singh (Trainee)',
+    email: 'rahul@coopsync.edu',
     role: 'student',
-    department: 'Computer Science & Engineering',
-    semester: 'Sem 5',
+    department: 'Dairy Cooperative Management',
+    semester: 'Batch 2026',
     degree: 'B.Tech',
     skills: 'Python, OpenCV, Machine Learning, React, FastAPI',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
@@ -30,37 +31,37 @@ const DEFAULT_USERS: UserProfile[] = [
     id: 2,
     student_id: '4868448',
     roll_number: '2400300100314',
-    name: 'Ranjan',
-    email: 'ranjan@coopsync.edu',
+    name: 'Priya Sharma (Trainee)',
+    email: 'priya@coopsync.edu',
     role: 'student',
-    department: 'Computer Science & Engineering',
-    semester: 'Sem 5',
+    department: 'Cooperative Law',
+    semester: 'Batch 2026',
     degree: 'B.Tech',
     skills: 'Python, Data Science, SQL, Deep Learning',
     avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150'
   },
   {
     id: 3,
-    student_id: '577575',
-    roll_number: '2400300100308',
-    name: 'Varun',
-    email: 'varun@coopsync.edu',
-    role: 'student',
-    department: 'Computer Science & Engineering',
-    semester: 'Sem 5',
-    degree: 'B.Tech',
-    skills: 'Python, Computer Vision, Docker, OpenCV',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'
+    student_id: 'NCCT001',
+    roll_number: 'NCCT-ADM-01',
+    name: 'NCCT National Admin',
+    email: 'ncct.admin@coopsync.gov.in',
+    role: 'ncct_admin',
+    department: 'National Council for Cooperative Training',
+    semester: 'HQ Admin',
+    degree: 'Ph.D',
+    skills: 'National Monitoring, Policy, ERP Governance',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'
   },
   {
     id: 4,
     student_id: 'ADMIN001',
     roll_number: 'EMP-ADM-01',
-    name: 'Dr. Anita Verma (Director)',
+    name: 'Dr. Anita Verma (VAMNICOM Director)',
     email: 'admin@coopsync.edu',
-    role: 'admin',
-    department: 'Cooperative Administration',
-    semester: 'Staff',
+    role: 'institution_admin',
+    department: 'VAMNICOM Pune Administration',
+    semester: 'Director',
     degree: 'Ph.D',
     skills: 'ERP Management, Governance, Education Policy',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'
@@ -69,7 +70,7 @@ const DEFAULT_USERS: UserProfile[] = [
     id: 5,
     student_id: 'TRN001',
     roll_number: 'EMP-TRN-04',
-    name: 'Prof. Rajesh Sharma',
+    name: 'Prof. Rajesh Sharma (Faculty)',
     email: 'trainer@coopsync.edu',
     role: 'trainer',
     department: 'Computer Vision & AI',
@@ -77,6 +78,18 @@ const DEFAULT_USERS: UserProfile[] = [
     degree: 'M.Tech',
     skills: 'Deep Learning, OpenCV, Embedded Systems',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'
+  },
+  {
+    id: 6,
+    student_id: 'EMP001',
+    roll_number: 'AMUL-HR-01',
+    name: 'AMUL Recruiter / Employer',
+    email: 'careers@amul.coop',
+    role: 'employer',
+    department: 'AMUL Talent Acquisition',
+    semester: 'HR Manager',
+    skills: 'Dairy Operations, Placement, Recruitment',
+    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150'
   }
 ];
 
@@ -117,7 +130,6 @@ export const App: React.FC = () => {
     try {
       const students = await fetchStudents();
       if (students && students.length > 0) {
-        // Merge with admin/trainer
         const merged = [
           ...students.map((s: any) => ({
             id: s.id,
@@ -131,8 +143,10 @@ export const App: React.FC = () => {
             skills: s.skills,
             avatar: s.avatar
           })),
-          DEFAULT_USERS[3], // Admin
-          DEFAULT_USERS[4]  // Trainer
+          DEFAULT_USERS[2], // NCCT Admin
+          DEFAULT_USERS[3], // Institution Admin
+          DEFAULT_USERS[4], // Trainer
+          DEFAULT_USERS[5]  // Employer
         ];
         setAllUsers(merged);
       }
@@ -159,7 +173,6 @@ export const App: React.FC = () => {
   };
 
   const handleAttendanceMarked = () => {
-    // Reload health or update stats
     checkHealth();
   };
 
@@ -187,6 +200,7 @@ export const App: React.FC = () => {
         padding: '28px 24px 60px 24px'
       }}>
         {activeTab === 'dashboard' && <AnalyticsView />}
+        {activeTab === 'programmes' && <ProgrammesView currentUser={currentUser} />}
         {activeTab === 'face-attendance' && (
           <FaceAttendanceView
             currentUser={currentUser}

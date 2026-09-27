@@ -11,7 +11,8 @@ import {
   Wifi, 
   WifiOff, 
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Calendar
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -40,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const navItems = [
     { id: 'dashboard', label: 'Analytics', icon: LayoutDashboard },
+    { id: 'programmes', label: 'Programmes', icon: Calendar },
     { id: 'face-attendance', label: 'Face AI', icon: Camera, highlight: true },
     { id: 'qr-attendance', label: 'QR Attendance', icon: QrCode },
     { id: 'students', label: 'Student ERP', icon: GraduationCap },
