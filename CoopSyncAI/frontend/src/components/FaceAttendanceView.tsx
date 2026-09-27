@@ -665,7 +665,7 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
               <h3 style={{ fontSize: '1.1rem' }}>Biometric Verification Result</h3>
             </div>
             <span className="badge badge-indigo" style={{ fontSize: '0.7rem' }}>
-              SIH26087 Security Module
+              Biometric Security Module
             </span>
           </div>
 
@@ -783,7 +783,7 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
             </div>
           )}
 
-          {/* Anti-Spoofing Innovation Telemetry (SIH WOW FACTOR) */}
+          {/* Anti-Spoofing Innovation Telemetry */}
           <div style={{
             background: 'rgba(99, 102, 241, 0.05)',
             border: '1px solid rgba(99, 102, 241, 0.15)',

@@ -302,8 +302,8 @@ export const PythonSuiteView: React.FC<PythonSuiteViewProps> = ({ currentUser })
               { title: 'Attendance Log', file: 'attendence.py', icon: FileSpreadsheet, color: '#f59e0b', action: () => setActiveModule('attendance') },
               { title: 'Train Data', file: 'train.py', icon: Database, color: '#06b6d4', action: () => setActiveModule('train') },
               { title: 'Photos Dataset', file: 'dataset/', icon: FolderOpen, color: '#ec4899', action: () => setActiveModule('student') },
-              { title: 'Help Desk', file: 'Help', icon: HelpCircle, color: '#8b5cf6', action: () => alert('CoopSync AI Help Desk: Contact NCCT Support or SIH Team.') },
-              { title: 'Developer Info', file: 'Dev', icon: Code, color: '#14b8a6', action: () => alert('CoopSync AI Core System • Problem Statement ID: SIH26087') }
+              { title: 'Help Desk', file: 'Help', icon: HelpCircle, color: '#8b5cf6', action: () => alert('CoopSync AI Help Desk: Contact NCCT Support Team.') },
+              { title: 'Developer Info', file: 'Dev', icon: Code, color: '#14b8a6', action: () => alert('CoopSync AI Core System • Enterprise Edition') }
             ].map((btn, idx) => {
               const Icon = btn.icon;
               return (

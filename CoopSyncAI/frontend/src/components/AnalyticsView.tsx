@@ -135,7 +135,7 @@ export const AnalyticsView: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Top Banner with SIH Theme */}
+      {/* Top Banner */}
       <div className="glass-panel" style={{
         padding: '24px',
         display: 'flex',
@@ -165,7 +165,7 @@ export const AnalyticsView: React.FC = () => {
           className="gradient-btn"
           style={{ padding: '10px 18px', fontSize: '0.85rem' }}
         >
-          <Download size={16} /> Export SIH Attendance CSV
+          <Download size={16} /> Export Attendance CSV
         </button>
       </div>
 

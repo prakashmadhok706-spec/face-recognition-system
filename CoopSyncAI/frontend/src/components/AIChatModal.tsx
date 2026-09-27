@@ -28,7 +28,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({ currentUser }) => {
     {
       id: '1',
       sender: 'ai',
-      text: `Hello ${currentUser.name}! I am your **CoopSync AI Advisor** for SIH 2026.\n\nI have direct access to your cooperative attendance records, course progress, and real-time job openings. How can I assist you today?`,
+      text: `Hello ${currentUser.name}! I am your **CoopSync AI Advisor**.\n\nI have direct access to your cooperative attendance records, course progress, and real-time job openings. How can I assist you today?`,
       suggestions: [
         "How many attendance days do I have?",
         "Recommend jobs for my skill profile",
@@ -121,7 +121,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({ currentUser }) => {
         </div>
 
         <span className="badge badge-indigo" style={{ fontSize: '0.7rem' }}>
-          SIH26087 AI Module
+          CoopSync AI Module
         </span>
       </div>
 

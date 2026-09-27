@@ -143,7 +143,7 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '750px' }}>
-            Unified student roster matching SIH26087 ERP specifications. Track attendance percentages, 
+            Unified student roster matching NCCT ERP specifications. Track attendance percentages, 
             skills development, course credits, and verified digital credentials in real time.
           </p>
         </div>

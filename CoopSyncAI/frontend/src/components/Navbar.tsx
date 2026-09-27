@@ -71,7 +71,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         flexWrap: 'wrap',
         gap: '16px'
       }}>
-        {/* Brand & SIH Badge */}
+        {/* Brand Badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
             width: '40px',
@@ -91,7 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 CoopSync <span className="gradient-text">AI</span>
               </span>
               <span className="badge badge-indigo" style={{ fontSize: '0.65rem' }}>
-                SIH 2026 • PS SIH26087
+                NCCT Enterprise ERP
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>

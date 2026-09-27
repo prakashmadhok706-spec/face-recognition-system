@@ -240,13 +240,13 @@ export const App: React.FC = () => {
           <div>
             <strong style={{ color: '#f8fafc' }}>CoopSync AI Ecosystem</strong> – Smart Education & Cooperative Digital Transformation
             <span style={{ margin: '0 8px' }}>•</span>
-            Problem Statement ID: <strong style={{ color: '#38bdf8' }}>SIH26087</strong>
+            <span style={{ color: '#38bdf8' }}>NCCT Enterprise ERP Platform</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <span>LBPH Face Classifier: <strong style={{ color: systemHealth?.classifier_loaded ? '#10b981' : '#f59e0b' }}>{systemHealth?.classifier_loaded ? 'Model Loaded (15MB)' : 'Active'}</strong></span>
             <span>Dataset: <strong>{systemHealth?.students_count || 10} Enrolled</strong></span>
-            <span style={{ color: '#818cf8' }}>SIH 2026 Ready</span>
+            <span style={{ color: '#818cf8' }}>Enterprise Ready</span>
           </div>
         </div>
       </footer>
