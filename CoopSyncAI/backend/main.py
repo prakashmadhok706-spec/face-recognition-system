@@ -680,6 +680,10 @@ def train_model_endpoint():
             continue
 
         student_id = student_folder.strip()
+        # Only train registered students in students.csv / DB
+        if students_map and student_id not in students_map:
+            continue
+
         if student_id.isdigit():
             numeric_label = int(student_id)
         else:

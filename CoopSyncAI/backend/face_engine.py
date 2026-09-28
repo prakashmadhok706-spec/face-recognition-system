@@ -142,15 +142,24 @@ class FaceRecognitionEngine:
         if self.recognizer:
             try:
                 pred_id, dist = self.recognizer.predict(face_roi_norm)
-                # LBPH distance: lower means closer match (0 is exact, >55 is distant/unknown)
-                confidence_percent = max(10.0, min(99.0, round(100 - (dist * 0.7), 1)))
+                # Boost confidence percentage curve for real-world webcam conditions
+                # dist 0 -> 99%, dist 40 -> 82%, dist 55 -> 75%, dist 68 -> 69%
+                confidence_percent = max(35.0, min(99.0, round(100 - (dist * 0.46), 1)))
                 print(f"[FaceEngine] Predict ID: {pred_id}, Distance: {dist:.2f}, Conf: {confidence_percent}%")
                 
-                # Strict biometric threshold: dist must be <= 65 (>=54.5% confidence)
-                # and must match a registered student name in self.labels
-                if dist <= 65 and pred_id in self.labels and not str(self.labels[pred_id]).startswith("Student #"):
-                    recognized_id = str(pred_id)
-                    student_name = self.labels[pred_id]
+                # Biometric threshold: dist <= 68 allows natural room lighting and head angles
+                # while strictly requiring match to registered student
+                label_name = self.labels.get(pred_id, "")
+                pred_str = str(pred_id)
+                if dist <= 68:
+                    if pred_str in self.student_info_cache:
+                        recognized_id = pred_str
+                        student_name = self.student_info_cache[pred_str]["name"]
+                    elif label_name and not str(label_name).isdigit() and not str(label_name).startswith("Student #"):
+                        recognized_id = pred_str
+                        student_name = label_name
+                    else:
+                        status = "Unregistered / Unknown Face"
                 else:
                     status = "Unregistered / Unknown Face"
             except Exception as e:
