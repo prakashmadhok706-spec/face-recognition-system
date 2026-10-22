@@ -49,6 +49,7 @@ export interface CourseItem {
   enrolled_count: number;
   description: string;
   thumbnail: string;
+  youtube_url?: string;
   progress_percentage: number;
 }
 

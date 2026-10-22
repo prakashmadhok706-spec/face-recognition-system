@@ -1,0 +1,70 @@
+﻿================================================================================
+          CoopSync AI -- SHORT & SIMPLE INTERVIEW Q&A
+          (Quick Review Cheat Sheet for Presentation/Viva)
+================================================================================
+
+--- 1. PROJECT BASICS ---
+
+Q1: What is this project in one line?
+A: It is an all-in-one college/cooperative ERP system that does smart attendance (Face + QR), student management, digital certificates, and job matching.
+
+Q2: What is the Problem Statement ID?
+A: SIH26087 (Theme: Smart Education / Cooperative Digital Transformation).
+
+Q3: What technologies are used?
+A: Python FastAPI (Backend), React + Vite (Frontend), OpenCV (Face Recognition), and SQLite (Database).
+
+
+--- 2. FACE RECOGNITION & SECURITY ---
+
+Q4: Which algorithm is used for face recognition?
+A: LBPH (Local Binary Pattern Histogram) with Haar Cascade for face detection.
+
+Q5: Why choose LBPH instead of deep learning (like CNN/FaceNet)?
+A: It is lightweight, fast (<5ms), works without any GPU, and runs smoothly on normal laptops/PCs.
+
+Q6: How does anti-spoofing work? Can someone use a photo to mark attendance?
+A: No. We check image texture using Laplacian Variance. Real faces have high texture (>45), while phone screens or printed photos have low/flat texture and get blocked.
+
+Q7: What is your face match threshold?
+A: An LBPH distance score <= 68 (around 69% confidence or higher). If it's worse, the system rejects it as an unknown face.
+
+
+--- 3. QR CODE ATTENDANCE ---
+
+Q8: How does the QR attendance work?
+A: The teacher generates a dynamic QR code that expires in 30 seconds. Students scan it to mark attendance.
+
+Q9: Can a student screenshot the QR and send it to friends on WhatsApp?
+A: No. It expires in 30 seconds, and each student can only scan it once per session.
+
+Q10: How do you prevent fake QR codes?
+A: Each QR code has a SHA-256 cryptographic hash with a secret server key. If modified, the server rejects it.
+
+
+--- 4. CERTIFICATES & AI FEATURES ---
+
+Q11: How do you make certificates fraud-proof?
+A: We generate PDFs using ReportLab with an embedded verification QR code. Anyone who scans it can verify the student record in our live database.
+
+Q12: How does the AI skill-to-job matching work?
+A: It compares the student's skills with job requirements using set matching and gives a match score (e.g., 85% match).
+
+Q13: How does the AI Chatbot work?
+A: It reads real live student data (attendance count, courses, job openings) and answers questions like attendance status and career advice.
+
+
+--- 5. SYSTEM & ARCHITECTURE ---
+
+Q14: What happens if internet goes down during attendance?
+A: Offline mode saves the scans in browser storage (localStorage) and auto-syncs to the database as soon as the internet returns.
+
+Q15: Why FastAPI instead of Django or Flask?
+A: FastAPI is much faster (async), has built-in data validation (Pydantic), and creates interactive Swagger API documentation automatically (/docs).
+
+Q16: Can you switch from SQLite to PostgreSQL?
+A: Yes. We use SQLAlchemy ORM. We just change the DATABASE_URL in the .env file without changing any code.
+
+Q17: How would you scale this for 10,000+ students?
+A: Switch to PostgreSQL database, use Redis for fast QR sessions, and run on cloud containers (Docker/Kubernetes).
+================================================================================

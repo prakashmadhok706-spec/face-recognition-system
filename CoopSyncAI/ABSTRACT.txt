@@ -1,0 +1,18 @@
+﻿                                    ABSTRACT
+
+SIH Problem Statement No.: 26087
+Title: CoopSync AI: AI-Enabled Cooperative ERP, Capacity Building & Employment Ecosystem
+
+
+The proposed project focuses on developing CoopSync AI, an end-to-end integrated digital enterprise platform tailored for cooperative training institutes, learning management, and employment ecosystems. Cooperative educational entities frequently encounter structural fragmentation - relying on manual attendance registers vulnerable to proxy marking, isolated course tracking, unverified paper certification susceptible to forgery, and disconnected job placement pathways.
+
+The system introduces a dual biometric and cryptographic verification architecture for attendance management. It integrates a computer-vision biometric verification pipeline utilizing Haar Cascades for face detection, Local Binary Pattern Histograms (LBPH) for facial identification, and Laplacian variance texture analysis for anti-spoofing and liveness verification. To ensure flexibility across diverse environments, a secondary dynamic QR code mechanism provides time-bounded (30-second expiring) session tokens fortified with SHA-256 cryptographic signatures, duplicate check-in prevention, and offline synchronization capabilities.
+
+Beyond attendance governance, the platform unifies an academic Learning Management System (LMS) with an automated, tamper-proof digital certification engine. Certificates are dynamically generated with cryptographically signed verification QR codes for instant public validation. Furthermore, an AI-driven employment matching engine algorithmically assesses candidate skill portfolios against cooperative industry requirements to facilitate targeted recruitment, complemented by an interactive AI career advisory chatbot and real-time operational analytics dashboards.
+
+The main objective is to deliver a secure, scalable, and modular cooperative ERP solution that eradicates proxy attendance, enforces verifiable credentials, and bridges the gap between vocational training and cooperative employment.
+
+
+Keywords: Computer Vision, LBPH Face Recognition, Anti-Spoofing, Dynamic QR Tokens, Cooperative ERP, Learning Management System (LMS), Tamper-Proof Certification, Skill-Matching Engine, Smart Education.
+
+Workflow Diagram Asset: coopsync_workflow.jpg

@@ -1,0 +1,394 @@
+﻿================================================================================
+   CoopSync AI - Interview Questions and Answers
+   Smart India Hackathon 2026 | Problem Statement: SIH26087
+   AI-Enabled Cooperative ERP & Employment Ecosystem
+================================================================================
+
+TECH STACK: Python | FastAPI | OpenCV | LBPH | React 19 | Vite | SQLAlchemy
+            SQLite | ReportLab | QRCode | Docker | TypeScript
+
+================================================================================
+SECTION 1: PROJECT OVERVIEW & PROBLEM STATEMENT
+================================================================================
+
+Q1. What problem does CoopSync AI solve?
+A:  CoopSync AI addresses SIH Problem Statement SIH26087 - the lack of a
+    unified digital platform for cooperative institutions to manage student
+    attendance, course learning, employment placement, and certificate
+    verification. Traditional institutes use paper-based or siloed systems
+    that are prone to proxy attendance, certificate fraud, and poor
+    job-skill matching. CoopSync AI integrates all of these into one
+    AI-powered ERP ecosystem.
+
+Q2. What are the 9 key modules of CoopSync AI?
+A:   1. AI Face Recognition Biometric Attendance (OpenCV LBPH + Anti-spoof)
+     2. Dynamic 30-Second Expiring QR Attendance (cryptographic token)
+     3. Student ERP & Capacity Building (rosters, attendance %, skills)
+     4. Cooperative Course & Trainer LMS (modules, syllabus, progress)
+     5. Tamper-Proof Digital Certificates (ReportLab PDF + embedded QR)
+     6. AI-Enabled Employment Portal (skill-to-job matching, 1-click apply)
+     7. Interactive Analytics Dashboard (Chart.js attendance trends)
+     8. CoopSync AI Advisor (conversational chatbot / ERP assistant)
+     9. Offline Attendance Sync (local queue auto-syncs on reconnect)
+
+Q3. What is your tech stack and why did you choose it?
+A:  - Backend: FastAPI (Python) - async support, auto Swagger docs, Pydantic
+      validation, making it production-ready quickly.
+    - Frontend: React 19 + Vite + TypeScript - fast HMR, type safety,
+      modern component architecture.
+    - Computer Vision: OpenCV LBPH - lightweight, runs without GPU, ideal
+      for cooperative institutes with basic hardware.
+    - Database: SQLAlchemy ORM + SQLite (swappable to PostgreSQL via env var).
+    - PDF Generation: ReportLab - full control over certificate layout.
+    - Containerization: Docker + Docker Compose - consistent deployment.
+
+================================================================================
+SECTION 2: FACE RECOGNITION ENGINE (face_engine.py)
+================================================================================
+
+Q4. What face recognition algorithm does CoopSync AI use and why?
+A:  We use LBPH (Local Binary Pattern Histogram) via OpenCV's
+    cv2.face.LBPHFaceRecognizer. LBPH was chosen because:
+    - It works well under varying lighting conditions (common in classrooms).
+    - It requires no GPU.
+    - It is fast to train and predict (real-time performance).
+    - It produces a confidence "distance" score we threshold for accuracy.
+
+Q5. How does the face detection pipeline work step by step?
+A:   Step 1: Decode the incoming base64 or raw bytes image.
+     Step 2: Convert to grayscale using cv2.cvtColor(BGR2GRAY).
+     Step 3: Run Haar Cascade face detection (haarcascade_frontalface_default.xml).
+     Step 4: If no face found, apply histogram equalization and retry.
+     Step 5: If image is small (<=300x300), treat entire image as a face crop.
+     Step 6: Pick the LARGEST face bounding box (multiple faces case).
+     Step 7: Resize face ROI to 200x200 and equalize histogram.
+     Step 8: Run LBPH recognizer.predict() to get (label_id, distance).
+     Step 9: Apply liveness check (Laplacian variance).
+     Step 10: Return structured JSON with student info, confidence, bounding box.
+
+Q6. What scaleFactor and minNeighbors did you use for Haar Cascade and why?
+A:  scaleFactor=1.05 (fine-grained pyramid scaling for better detection at
+    various distances) and minNeighbors=2 (lower value to detect faces even
+    at awkward angles/lighting, accepting slightly more false positives in
+    exchange for fewer missed detections in classroom settings).
+
+Q7. How do you convert LBPH distance to a confidence percentage?
+A:  Formula: confidence_percent = max(35.0, min(99.0, round(100 - (dist * 0.46), 1)))
+    Examples:
+    - dist=0   -> ~99%  (perfect match)
+    - dist=40  -> ~82%
+    - dist=55  -> ~75%
+    - dist=68  -> ~69%  (threshold boundary)
+    - dist>68  -> rejected as "Unregistered / Unknown Face"
+
+Q8. What is the recognition threshold and how did you decide on 68?
+A:  A distance threshold of 68 was chosen empirically to:
+    - Allow for natural room lighting variation and minor head angle changes.
+    - Strictly reject unregistered faces (no false positives).
+    - Distances beyond 68 yield <69% confidence, which we treat as unreliable.
+
+Q9. What is the anti-spoofing (liveness detection) mechanism?
+A:  We use Laplacian Variance analysis:
+      laplacian_var = cv2.Laplacian(gray_roi, cv2.CV_64F).var()
+      is_live = (laplacian_var > 45.0)
+    The Laplacian operator measures image sharpness/edge density.
+    - A real, live human face has high texture variance (>45).
+    - Printed photos or phone screens have low texture or moire patterns.
+    This is a lightweight, GPU-free anti-spoofing solution suitable for
+    cooperative institute hardware.
+
+Q10. What happens if no trained LBPH model (classifier.xml) is found?
+A:   The system falls back to "student_id_hint" mode. If the frontend passes
+     a known student ID along with the image, and no trained model is loaded,
+     the system will use that hint to return student info. This allows demos
+     and testing without a trained model file. Controlled by:
+     "if not recognized_id and student_id_hint and self.recognizer is None"
+
+Q11. How is the face engine initialized?
+A:   It follows the Singleton pattern - a single face_engine instance is
+     created at module import time. On init, it:
+     1. Loads Haar cascade XML from cv2.data.haarcascades.
+     2. Searches for classifier.xml in WORKSPACE_DATA_DIR then LOCAL_DATA_DIR.
+     3. Loads labels from labels.csv and student info from students.csv.
+     4. Loads the LBPH model if found.
+
+================================================================================
+SECTION 3: QR ATTENDANCE ENGINE (qr_engine.py)
+================================================================================
+
+Q12. How does the dynamic QR attendance system work?
+A:   1. Instructor requests a new QR code via API.
+     2. Server generates a unique session_id (UUID v4, first 8 chars).
+     3. An expiry timestamp is set (current Unix time + 30 seconds).
+     4. A cryptographic token hash is computed using SHA-256:
+           payload = "{session_id}|{session_name}|{expires_at}|{SECRET_SALT}"
+           token_hash = hashlib.sha256(payload).hexdigest()[:16]
+     5. QR data = "COOPSYNC-ATTENDANCE:{session_id}:{expires_at}:{hash}:{name}"
+     6. QR image is generated and returned as base64 PNG.
+     7. Session stored in ACTIVE_QR_SESSIONS in-memory dict.
+
+Q13. How is QR code tampering prevented?
+A:   A SHA-256 HMAC-style hash is embedded in the QR data. On scan:
+     - The server recomputes the hash from the QR components + secret salt.
+     - If the recomputed hash != the embedded hash, it returns:
+       "Security Signature Mismatch / Spoofed QR Code".
+     This prevents attackers from creating fake QR codes manually.
+
+Q14. How do you prevent replay attacks (scanning the same QR twice)?
+A:   Two mechanisms:
+     1. Time expiry: QR codes expire after 30 seconds (Unix timestamp check).
+     2. Duplicate prevention: The session tracks "used_by" as a set of IDs.
+        If the same student_id scans twice:
+        "You have already scanned this QR session code."
+
+Q15. Why 30-second expiry for QR codes?
+A:   A 30-second window is short enough that:
+     - Students cannot share the QR code via WhatsApp to remote friends.
+     - It is long enough for all students in a room to scan comfortably.
+     This is a standard OTP-style time window used in 2FA systems.
+
+Q16. What error correction level do you use in QR generation?
+A:   ERROR_CORRECT_M (Medium - ~15% damage recovery). It balances QR density
+     (scannable on mobile) with robustness against partial damage/glare.
+
+================================================================================
+SECTION 4: DATABASE & ORM (database.py)
+================================================================================
+
+Q17. What ORM and database does CoopSync AI use?
+A:   SQLAlchemy 2.0 ORM with SQLite (default). The DATABASE_URL can be set
+     via environment variable to switch to PostgreSQL for production.
+     The code also handles the Heroku-style postgres:// -> postgresql:// fix.
+
+Q18. What database models/tables exist?
+A:   1. users            - Student/trainer/admin/employer accounts
+     2. attendances      - Biometric/QR attendance logs per student per day
+     3. courses          - Cooperative training courses with progress
+     4. certificates     - PDF certificate records with QR verification
+     5. jobs             - Employer job postings with required skills
+     6. job_applications - Student-to-job application with match score & status
+
+Q19. How does FastAPI integrate with SQLAlchemy?
+A:   Using the Dependency Injection pattern via FastAPI Depends:
+     def get_db():
+         db = SessionLocal()
+         try: yield db
+         finally: db.close()
+     Each route receives "db: Session = Depends(get_db)", ensuring the session
+     is properly opened and closed per request.
+
+Q20. What relationships are defined in the database?
+A:   - User -> Attendance (one-to-many via back_populates)
+     - User -> Certificate (one-to-many)
+     - User -> JobApplication (one-to-many)
+     - Job  -> JobApplication (one-to-many)
+
+Q21. How is check_same_thread handled for SQLite?
+A:   SQLite does not allow multi-threaded access by default. We pass:
+       connect_args={"check_same_thread": False}
+     This is safe because SQLAlchemy manages connection pooling and
+     FastAPI uses async workers, not raw threading.
+
+================================================================================
+SECTION 5: AI ENGINE & SKILL MATCHING (ai_engine.py)
+================================================================================
+
+Q22. How does the AI skill matching algorithm work?
+A:   It uses set-based intersection matching:
+     1. Both student skills and job skills are split by commas/pipes/slashes.
+     2. Both sets are lowercased and stripped.
+     3. Overlap = intersection of the two sets.
+     4. base_score = (len(overlap) / len(required)) * 100
+     5. A +25 bonus is added if at least one skill matches, ensuring a
+        realistic baseline (55% to 98% range).
+
+Q23. Why add a +25 bonus to the skill match score?
+A:   Pure keyword matching undervalues candidates with broad skill sets.
+     A student who knows Python might also know FastAPI but did not list it.
+     The bonus provides a realistic market-like score while still rewarding
+     higher overlap.
+
+Q24. What are the 4 query categories the CoopSync AI Advisor handles?
+A:   1. Attendance queries  (keywords: attendance, present, absent, percentage)
+     2. Job queries         (keywords: job, career, employment, salary, placement)
+     3. Course queries      (keywords: course, recommend, learn, skills, gap)
+     4. Security queries    (keywords: proxy, spoof, liveness, camera)
+     Any other query falls into a default "how can I help you" response.
+
+Q25. Is the AI advisor rule-based or ML-based?
+A:   It is rule-based (keyword intent matching), NOT an LLM or ML model.
+     This was a deliberate design choice for reliability, zero inference cost,
+     and predictability. However, the function signature supports full profile
+     + jobs + courses context, so a real LLM API call can be dropped in
+     without changing the interface.
+
+================================================================================
+SECTION 6: CERTIFICATE ENGINE (certificate_engine.py)
+================================================================================
+
+Q26. How are digital certificates generated?
+A:   Using ReportLab (Python PDF library):
+     - A PDF canvas is created with A4 landscape dimensions.
+     - Student name, course, date, grade, and certificate number are drawn.
+     - A QR code embedding the certificate verification URL is embedded.
+     - Certificates are saved to /certificates and served via API.
+
+Q27. How is certificate authenticity verified?
+A:   Each certificate has a unique certificate_no in the database.
+     A QR code in the PDF encodes the certificate_no. Anyone scanning it
+     can call the verification API endpoint which queries the DB to confirm
+     authenticity. This prevents fake/forged certificates.
+
+================================================================================
+SECTION 7: BACKEND API (main.py / FastAPI)
+================================================================================
+
+Q28. How does CORS work in your API?
+A:   CORSMiddleware is added with allow_origins=["*"] to allow the React
+     frontend (localhost:5173) to call the FastAPI backend (localhost:8000)
+     without browser CORS blocks. In production, this would be restricted
+     to specific domains.
+
+Q29. How is the image sent from frontend to backend for face recognition?
+A:   The webcam captures a frame via the browser's getUserMedia API.
+     The frame is drawn on a HTML5 Canvas, then exported as base64 JPEG:
+       canvas.toDataURL("image/jpeg")
+     This base64 string is sent in a JSON POST body to the /recognize endpoint.
+     The backend calls face_engine.recognize_base64(b64_str).
+
+Q30. How do you handle startup database seeding?
+A:   The seed_initial_data() function is called once on app startup.
+     It checks if any users exist (db.query(User).count()) and only seeds
+     sample data if the DB is empty. This prevents duplicates on restart.
+
+Q31. What HTTP methods and REST conventions do you follow?
+A:   - GET    -> Fetch data (students, courses, jobs, attendance logs)
+     - POST   -> Create records, submit face/QR recognition
+     - PUT    -> Update student profile or course
+     - DELETE -> Remove records
+     FastAPI auto-generates Swagger/OpenAPI docs at /docs.
+
+================================================================================
+SECTION 8: FRONTEND (React + Vite + TypeScript)
+================================================================================
+
+Q32. What frontend framework and build tool did you use?
+A:   React 19 with TypeScript, built with Vite. Vite provides instant HMR
+     (Hot Module Replacement) and extremely fast builds compared to CRA.
+
+Q33. What are the key frontend components?
+A:   - FaceAttendanceView.tsx  - Webcam capture + face recognition UI
+     - QRAttendanceView.tsx   - QR code scanner + display UI
+     - main.tsx               - Root app entry point with routing
+
+Q34. How does the frontend communicate with the backend?
+A:   Via fetch/axios HTTP calls to http://localhost:8000. React components
+     call FastAPI endpoints and update local state with results.
+
+================================================================================
+SECTION 9: DOCKER & DEPLOYMENT
+================================================================================
+
+Q35. How is the app containerized?
+A:   Two Dockerfiles exist:
+     - backend/Dockerfile  -> Python image, installs requirements, runs uvicorn
+     - frontend/Dockerfile -> Node image, npm install, build, serves dist
+     docker-compose.yml orchestrates both containers with defined ports and
+     a shared network so the frontend can reach the backend service.
+
+Q36. What port mapping does docker-compose use?
+A:   - Backend:  host port 8000 -> container port 8000 (FastAPI/Uvicorn)
+     - Frontend: host port 5173 -> container (Vite dev server)
+
+================================================================================
+SECTION 10: OFFLINE & EDGE CASES
+================================================================================
+
+Q37. How does offline attendance sync work?
+A:   When the network is unavailable, attendance data is queued in the
+     browser's localStorage. When connection is restored, the frontend
+     detects reconnection and auto-flushes the queue to the backend API.
+     This ensures no attendance record is lost due to connectivity loss.
+
+Q38. How do you handle the case where cv2.face LBPH module is missing?
+A:   The code checks:
+       hasattr(cv2, "face") and hasattr(cv2.face, "LBPHFaceRecognizer_create")
+     If LBPH is unavailable (base opencv without contrib), it logs:
+     "Running in smart Haar + AI mode" and operates with hint-based fallback.
+
+Q39. How do you handle multiple faces in a single frame?
+A:   The face with the largest bounding box area (w * h) is selected:
+       sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
+     This selects the closest/most prominent face in the webcam frame.
+
+================================================================================
+SECTION 11: SECURITY
+================================================================================
+
+Q40. What security measures are implemented?
+A:   1. Anti-spoofing: Laplacian variance liveness check (rejects photos/screens).
+     2. QR Cryptographic Hash: SHA-256 prevents QR forgery.
+     3. QR Time Expiry: 30-second window prevents replay/sharing attacks.
+     4. QR Duplicate Prevention: One-time scan per student per session.
+     5. Face Confidence Threshold: Distance > 68 is strictly rejected.
+     6. Password Hashing: Stored as password_hash, not plaintext.
+     7. No Default Fallback: Unrecognized faces CANNOT be marked present.
+
+Q41. Why not use a deep learning model like FaceNet or ArcFace instead of LBPH?
+A:   LBPH was chosen for the cooperative institute context because:
+     - No GPU required (institutes may only have basic laptops/desktops).
+     - Training is fast (minutes vs. hours for deep learning).
+     - Model file is small (KB vs. hundreds of MB for DL models).
+     - Inference is real-time at <5ms per frame on CPU.
+     DeepFace/FaceNet can be plugged in as a future upgrade through the
+     recognize_image_bytes() interface without changing the API.
+
+================================================================================
+SECTION 12: TRICKY / DEEP-DIVE QUESTIONS
+================================================================================
+
+Q42. What is the difference between scaleFactor and minNeighbors in Haar Cascade?
+A:   - scaleFactor: How much the image is reduced at each pyramid level.
+       1.05 = 5% reduction per level (slower but more accurate).
+       1.3  = 30% reduction (faster but misses more faces).
+     - minNeighbors: How many overlapping detections confirm a face.
+       Lower values = more detections (less strict, more false positives).
+       Higher values = fewer detections (stricter, fewer false positives).
+
+Q43. Why do you equalizeHist the face ROI before LBPH prediction?
+A:   LBPH was trained on histogram-equalized face images. Applying the same
+     normalization at inference ensures consistent lighting representation,
+     significantly improving recognition accuracy under dim or bright light.
+
+Q44. What does the ROOT_DIR path resolution logic do?
+A:   ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+     This navigates 2 directories up from backend/ to reach the workspace root,
+     where students.csv and the data/ folder (with classifier.xml) are stored.
+     This makes the system work whether run from Docker, VS Code, or terminal.
+
+Q45. What is the purpose of the FaceRecognitionEngine Singleton?
+A:   A single engine instance is created at module load:
+       face_engine = FaceRecognitionEngine()
+     This means the LBPH model is loaded ONCE into memory, not on every request.
+     This prevents repeated disk I/O and ensures fast prediction times.
+
+Q46. How would you scale CoopSync AI for 10,000 students?
+A:   1. Replace SQLite with PostgreSQL or MySQL.
+     2. Move the face recognizer to a GPU worker service (FAISS + FaceNet).
+     3. Use Redis for QR session storage (replace in-memory ACTIVE_QR_SESSIONS).
+     4. Add JWT-based authentication.
+     5. Deploy on Kubernetes with horizontal pod autoscaling.
+     6. Add S3/GCS for certificate PDF and face image storage.
+
+Q47. What is a potential weakness of the current liveness detection?
+A:   Laplacian variance can be fooled by a high-resolution printed photo or
+     a high-quality smartphone display with good PPI. Improvements:
+     - Blink detection using dlib eye aspect ratio (EAR).
+     - Challenge-response (ask user to turn head left/right).
+     - Infrared or depth camera (hardware-level liveness).
+     - 3D texture analysis models (Silent-Face-Anti-Spoofing, PRNet).
+
+================================================================================
+   GOOD LUCK WITH YOUR INTERVIEW!
+   CoopSync AI | SIH 2026 | Problem Statement: SIH26087
+================================================================================

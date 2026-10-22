@@ -1,6 +1,16 @@
-const API_BASE = (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000'))
-  ? '/api'
-  : 'http://127.0.0.1:8000/api';
+// Always use direct backend URL — avoids port-mismatch issues when Vite uses a different port
+const API_BASE = 'http://127.0.0.1:8000/api';
+
+// Safe JSON parser — prevents "Unexpected end of JSON input" when server returns empty body
+async function safeJson(res: Response) {
+  const text = await res.text();
+  if (!text || text.trim() === '') return { success: false, message: 'Empty response from server' };
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: false, message: `Server error: ${text.substring(0, 200)}` };
+  }
+}
 
 export async function fetchHealth() {
   try {
@@ -106,8 +116,11 @@ export async function createCourse(courseData: any) {
   return await res.json();
 }
 
-export async function fetchCertificates() {
-  const res = await fetch(`${API_BASE}/certificates`);
+export async function fetchCertificates(studentName?: string) {
+  const url = studentName 
+    ? `${API_BASE}/certificates?student_name=${encodeURIComponent(studentName)}` 
+    : `${API_BASE}/certificates`;
+  const res = await fetch(url);
   return await res.json();
 }
 
@@ -149,28 +162,40 @@ export async function sendAIChat(query: string, userId: number = 1) {
 }
 
 export async function addStudentApi(studentData: any) {
-  const res = await fetch(`${API_BASE}/students/add`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(studentData),
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/students/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(studentData),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
 }
 
 export async function captureSampleApi(sampleData: any) {
-  const res = await fetch(`${API_BASE}/students/capture-sample`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(sampleData),
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/students/capture-sample`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sampleData),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}`, samples_count: 0 };
+  }
 }
 
 export async function trainModelApi() {
-  const res = await fetch(`${API_BASE}/train-model`, {
-    method: 'POST',
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/train-model`, {
+      method: 'POST',
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
 }
 
 export async function updateStudentApi(studentId: string, studentData: any) {
@@ -185,6 +210,13 @@ export async function updateStudentApi(studentId: string, studentData: any) {
 export async function deleteStudentApi(studentId: string) {
   const res = await fetch(`${API_BASE}/students/${studentId}`, {
     method: 'DELETE',
+  });
+  return await res.json();
+}
+
+export async function clearAttendanceLogsApi() {
+  const res = await fetch(`${API_BASE}/attendance/clear`, {
+    method: 'POST',
   });
   return await res.json();
 }

@@ -12,9 +12,12 @@ import {
   UserPlus,
   Camera,
   Upload,
-  Sparkles
+  Sparkles,
+  Trash2,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
-import { fetchStudents, addStudentApi, captureSampleApi } from '../api';
+import { fetchStudents, addStudentApi, captureSampleApi, deleteStudentApi } from '../api';
 import { UserProfile } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -40,6 +43,11 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
   const [sampleCount, setSampleCount] = useState<number>(0);
   const [registerMsg, setRegisterMsg] = useState<string | null>(null);
 
+  // Delete Student State
+  const [studentToDelete, setStudentToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -53,6 +61,27 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
       setStudents(res);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    setIsDeleting(true);
+    try {
+      const targetId = studentToDelete.student_id || String(studentToDelete.id);
+      const res = await deleteStudentApi(targetId);
+      if (res && res.success !== false) {
+        setDeleteSuccessMsg(res.message || `Student ${studentToDelete.name} deleted successfully.`);
+        setStudentToDelete(null);
+        await loadStudents();
+      } else {
+        alert(res?.message || 'Failed to delete student.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Error deleting student: ' + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -215,6 +244,37 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
         </div>
       </div>
 
+      {/* Deletion Success Banner */}
+      {deleteSuccessMsg && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 18px',
+          background: 'rgba(16, 185, 129, 0.15)',
+          border: '1px solid #10b981',
+          borderRadius: '10px',
+          color: '#a7f3d0',
+          fontSize: '0.85rem'
+        }}>
+          <span>{deleteSuccessMsg}</span>
+          <button
+            onClick={() => setDeleteSuccessMsg(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#a7f3d0',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '1rem',
+              padding: '0 4px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Student Cards Grid */}
       <div style={{
         display: 'grid',
@@ -285,10 +345,10 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
             </div>
 
             {/* Skills Badges */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {student.skills?.split(',').map((skill: string, idx: number) => (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+              {student.skills?.split(',').map((skill: string, sIdx: number) => (
                 <span
-                  key={idx}
+                  key={sIdx}
                   style={{
                     background: 'rgba(99, 102, 241, 0.1)',
                     color: '#c7d2fe',
@@ -302,6 +362,52 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
                   {skill.trim()}
                 </span>
               ))}
+            </div>
+
+            {/* Action Bar with Delete Option */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+            }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                {student.degree || 'B.Tech'} • {student.year || '3rd Year'}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStudentToDelete(student);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '6px',
+                  padding: '5px 10px',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)';
+                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)';
+                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                }}
+                title={`Delete ${student.name} from records`}
+              >
+                <Trash2 size={13} />
+                Delete Record
+              </button>
             </div>
           </div>
         ))}
@@ -407,6 +513,155 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {studentToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.82)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 110,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '520px',
+            padding: '26px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            boxShadow: '0 20px 40px rgba(239, 68, 68, 0.15)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ef4444'
+              }}>
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', color: '#f8fafc', margin: 0 }}>Delete Student Record</h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  Permanent removal from CoopSync ERP system
+                </p>
+              </div>
+            </div>
+
+            {/* Target Student Preview */}
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '10px',
+              padding: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              marginBottom: '16px'
+            }}>
+              <img
+                src={studentToDelete.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"}
+                alt={studentToDelete.name}
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid #ef4444'
+                }}
+              />
+              <div>
+                <h4 style={{ fontSize: '1.05rem', color: '#f8fafc', margin: 0 }}>{studentToDelete.name}</h4>
+                <p style={{ fontSize: '0.8rem', color: '#38bdf8', margin: '2px 0' }}>
+                  Roll: {studentToDelete.roll_number || studentToDelete.student_id} • ID: {studentToDelete.student_id}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Dept: {studentToDelete.department}
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '0.8rem',
+              color: '#fca5a5',
+              lineHeight: 1.5,
+              marginBottom: '20px'
+            }}>
+              ⚠️ <b>Warning:</b> This action will permanently remove:
+              <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
+                <li>Academic profile & ERP registry records</li>
+                <li>Biometric face photos in <code>dataset/{studentToDelete.student_id}</code></li>
+                <li>OpenCV LBPH recognizer cache and <code>students.csv</code></li>
+                <li>All attendance history logs</li>
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setStudentToDelete(null)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#f8fafc',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteStudent}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '9px 20px',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)'
+                }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={15} />
+                    Confirm Delete
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

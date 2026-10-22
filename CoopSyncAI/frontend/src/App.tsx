@@ -149,6 +149,11 @@ export const App: React.FC = () => {
           DEFAULT_USERS[5]  // Employer
         ];
         setAllUsers(merged);
+        // Sync currentUser with freshly loaded data (updates stale name/skills/avatar)
+        setCurrentUser(prev => {
+          const freshProfile = merged.find(u => u.id === prev.id);
+          return freshProfile || prev;
+        });
       }
     } catch (e) {
       console.warn('Using default users', e);

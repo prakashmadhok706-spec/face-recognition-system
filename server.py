@@ -464,30 +464,114 @@ def get_courses():
     return [
         {
             "id": 1,
-            "title": "Dairy Cooperative Management & Tech",
-            "category": "Dairy & Agriculture",
-            "trainer_name": "Prof. Rajesh Sharma",
-            "duration": "6 Weeks",
-            "modules_count": 8,
-            "enrolled_count": 48,
-            "description": "Comprehensive capacity building in dairy supply chain, cold storage ERP, and milk collection automation.",
-            "thumbnail": "https://images.unsplash.com/photo-1527153857715-3908f2bae5e8?w=500",
-            "progress_percentage": 60
+            "title": "Data Structures & Algorithms (DSA) in C++ / Java",
+            "category": "Computer Engineering (Core)",
+            "trainer_name": "Dr. Arvind Subramanian",
+            "duration": "12 Weeks",
+            "modules_count": 24,
+            "enrolled_count": 185,
+            "description": "Foundations and advanced problem-solving: Dynamic Programming, Graph Algorithms, Trees, Tries, Heaps, and LeetCode interview preparation.",
+            "thumbnail": "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500",
+            "progress_percentage": 82
         },
         {
             "id": 2,
-            "title": "PACS Accounting & Digital Governance",
-            "category": "Finance & ERP",
-            "trainer_name": "Dr. Anita Verma",
-            "duration": "4 Weeks",
-            "modules_count": 6,
-            "enrolled_count": 42,
-            "description": "Primary Agricultural Credit Societies audit, double-entry bookkeeping, and NABARD compliance.",
-            "thumbnail": "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=500",
-            "progress_percentage": 35
+            "title": "Operating Systems & System Architecture",
+            "category": "Computer Engineering (Core)",
+            "trainer_name": "Prof. Rajesh Sharma",
+            "duration": "10 Weeks",
+            "modules_count": 18,
+            "enrolled_count": 142,
+            "description": "Deep dive into Process Scheduling, Virtual Memory, Deadlocks, File Systems, POSIX Multithreading, and Linux Kernel Internals.",
+            "thumbnail": "https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=500",
+            "progress_percentage": 75
         },
         {
             "id": 3,
+            "title": "Database Management Systems (DBMS) & Distributed SQL",
+            "category": "Computer Engineering (Core)",
+            "trainer_name": "Dr. Anita Verma",
+            "duration": "8 Weeks",
+            "modules_count": 16,
+            "enrolled_count": 160,
+            "description": "Relational schema design, ACID transactions, B-Tree indexing, query execution planning in PostgreSQL, and distributed NoSQL databases.",
+            "thumbnail": "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=500",
+            "progress_percentage": 70
+        },
+        {
+            "id": 4,
+            "title": "Computer Networks & Distributed Systems",
+            "category": "Computer Engineering (Systems)",
+            "trainer_name": "Er. Vikram Sen",
+            "duration": "8 Weeks",
+            "modules_count": 14,
+            "enrolled_count": 128,
+            "description": "TCP/IP stack, socket programming, HTTP/3, CDN distribution, routing protocols, and distributed consensus mechanisms.",
+            "thumbnail": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500",
+            "progress_percentage": 65
+        },
+        {
+            "id": 5,
+            "title": "Artificial Intelligence & Deep Learning with PyTorch",
+            "category": "Computer Engineering (AI/ML)",
+            "trainer_name": "Prof. Rajesh Sharma",
+            "duration": "10 Weeks",
+            "modules_count": 20,
+            "enrolled_count": 210,
+            "description": "Neural networks, Backpropagation, CNNs for computer vision, Transformers, Natural Language Processing, and production model serving.",
+            "thumbnail": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500",
+            "progress_percentage": 90
+        },
+        {
+            "id": 6,
+            "title": "Full-Stack Software Engineering (React 19, FastAPI & Docker)",
+            "category": "Computer Engineering (Software Dev)",
+            "trainer_name": "Er. Priyansh Topal",
+            "duration": "10 Weeks",
+            "modules_count": 22,
+            "enrolled_count": 195,
+            "description": "Modern enterprise web systems: React 19, TypeScript, async FastAPI microservices, JWT authentication, and Docker container orchestration.",
+            "thumbnail": "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500",
+            "progress_percentage": 88
+        },
+        {
+            "id": 7,
+            "title": "Cybersecurity, Cryptography & Network Defense",
+            "category": "Computer Engineering (Security)",
+            "trainer_name": "Col. Sanjeev Kapoor",
+            "duration": "8 Weeks",
+            "modules_count": 15,
+            "enrolled_count": 134,
+            "description": "Network penetration testing, cryptographic hashing (SHA-256), public-key infrastructure, salt rotation, and zero-trust security postures.",
+            "thumbnail": "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=500",
+            "progress_percentage": 58
+        },
+        {
+            "id": 8,
+            "title": "Cloud Computing & DevOps (AWS, Kubernetes, CI/CD)",
+            "category": "Computer Engineering (Cloud/DevOps)",
+            "trainer_name": "Er. Amit Chawla",
+            "duration": "6 Weeks",
+            "modules_count": 12,
+            "enrolled_count": 172,
+            "description": "Cloud architecture on AWS, Infrastructure-as-Code with Terraform, Docker swarm/Kubernetes clusters, and automated CI/CD pipelines.",
+            "thumbnail": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500",
+            "progress_percentage": 72
+        },
+        {
+            "id": 9,
+            "title": "Object-Oriented Design & System Architecture",
+            "category": "Computer Engineering (Core)",
+            "trainer_name": "Dr. Meenakshi Sundaram",
+            "duration": "6 Weeks",
+            "modules_count": 12,
+            "enrolled_count": 115,
+            "description": "SOLID principles, GoF design patterns, high-level and low-level system design, UML modeling, and scalable microservices patterns.",
+            "thumbnail": "https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=500",
+            "progress_percentage": 62
+        },
+        {
+            "id": 10,
             "title": "AI Computer Vision & Biometrics in ERP",
             "category": "AI & Technology",
             "trainer_name": "Prof. Rajesh Sharma",
@@ -703,6 +787,65 @@ def add_student(req: StudentCreateRequest):
         "success": True,
         "message": f"Student '{req.name}' (ID: {req.id}) added to ERP dataset!",
         "dataset_path": student_folder
+    }
+
+
+@app.delete("/api/students/{student_id}")
+def delete_student(student_id: str):
+    import shutil
+    import glob
+    sid = str(student_id).strip()
+    deleted_name = sid
+
+    # 1. Delete from students.csv
+    if os.path.exists(STUDENTS_FILE):
+        try:
+            rows = []
+            with open(STUDENTS_FILE, "r", newline="", encoding="utf-8") as f:
+                for row in csv.reader(f):
+                    if row and row[0].strip() == sid:
+                        if len(row) > 1:
+                            deleted_name = row[1]
+                    elif row:
+                        rows.append(row)
+            with open(STUDENTS_FILE, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerows(rows)
+        except Exception as e:
+            print(f"Error deleting from students.csv: {e}")
+
+    # 2. Delete from labels.csv
+    if os.path.exists(LABELS_PATH):
+        try:
+            l_rows = []
+            with open(LABELS_PATH, "r", newline="", encoding="utf-8") as f:
+                for row in csv.reader(f):
+                    if row and row[0].strip() != sid:
+                        l_rows.append(row)
+            with open(LABELS_PATH, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerows(l_rows)
+        except Exception as e:
+            print(f"Error deleting from labels.csv: {e}")
+
+    # 3. Delete dataset folder
+    student_folder = os.path.join(DATASET_DIR, sid)
+    if os.path.exists(student_folder):
+        try:
+            shutil.rmtree(student_folder, ignore_errors=True)
+        except Exception as e:
+            print(f"Error deleting dataset folder: {e}")
+
+    # Remove user.<sid>.* images directly in dataset/
+    for img_file in glob.glob(os.path.join(DATASET_DIR, f"user.{sid}.*")):
+        try:
+            os.remove(img_file)
+        except Exception as e:
+            print(f"Error removing image file {img_file}: {e}")
+
+    return {
+        "success": True,
+        "message": f"🗑️ Student {deleted_name} (ID: {sid}) deleted completely from system and dataset."
     }
 
 

@@ -75,6 +75,7 @@ class Course(Base):
     enrolled_count = Column(Integer, default=45)
     description = Column(Text)
     thumbnail = Column(String(255), default="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500")
+    youtube_url = Column(String(255), default="https://www.youtube.com/watch?v=8hly31xKli0")
     progress_percentage = Column(Integer, default=75)
     created_at = Column(DateTime, default=datetime.utcnow)
 

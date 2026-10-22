@@ -3,6 +3,7 @@ import sys
 import subprocess
 import base64
 import csv
+import random
 import cv2
 import numpy as np
 from datetime import datetime, date
@@ -119,6 +120,105 @@ def seed_initial_data():
 
             # Seed Courses
             courses = [
+                Course(
+                    title="Data Structures & Algorithms (DSA) in C++ / Java",
+                    category="Computer Engineering (Core)",
+                    trainer_name="Dr. Arvind Subramanian",
+                    duration="12 Weeks",
+                    modules_count=24,
+                    enrolled_count=185,
+                    description="Foundations and advanced problem-solving: Dynamic Programming, Graph Algorithms, Trees, Tries, Heaps, and LeetCode interview preparation.",
+                    thumbnail="https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500",
+                    progress_percentage=82
+                ),
+                Course(
+                    title="Operating Systems & System Architecture",
+                    category="Computer Engineering (Core)",
+                    trainer_name="Prof. Rajesh Sharma",
+                    duration="10 Weeks",
+                    modules_count=18,
+                    enrolled_count=142,
+                    description="Deep dive into Process Scheduling, Virtual Memory, Deadlocks, File Systems, POSIX Multithreading, and Linux Kernel Internals.",
+                    thumbnail="https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=500",
+                    progress_percentage=75
+                ),
+                Course(
+                    title="Database Management Systems (DBMS) & Distributed SQL",
+                    category="Computer Engineering (Core)",
+                    trainer_name="Dr. Anita Verma",
+                    duration="8 Weeks",
+                    modules_count=16,
+                    enrolled_count=160,
+                    description="Relational schema design, ACID transactions, B-Tree indexing, query execution planning in PostgreSQL, and distributed NoSQL databases.",
+                    thumbnail="https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=500",
+                    progress_percentage=70
+                ),
+                Course(
+                    title="Computer Networks & Distributed Systems",
+                    category="Computer Engineering (Systems)",
+                    trainer_name="Er. Vikram Sen",
+                    duration="8 Weeks",
+                    modules_count=14,
+                    enrolled_count=128,
+                    description="TCP/IP stack, socket programming, HTTP/3, CDN distribution, routing protocols, and distributed consensus mechanisms.",
+                    thumbnail="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500",
+                    progress_percentage=65
+                ),
+                Course(
+                    title="Artificial Intelligence & Deep Learning with PyTorch",
+                    category="Computer Engineering (AI/ML)",
+                    trainer_name="Prof. Rajesh Sharma",
+                    duration="10 Weeks",
+                    modules_count=20,
+                    enrolled_count=210,
+                    description="Neural networks, Backpropagation, CNNs for computer vision, Transformers, Natural Language Processing, and production model serving.",
+                    thumbnail="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500",
+                    progress_percentage=90
+                ),
+                Course(
+                    title="Full-Stack Software Engineering (React 19, FastAPI & Docker)",
+                    category="Computer Engineering (Software Dev)",
+                    trainer_name="Er. Priyansh Topal",
+                    duration="10 Weeks",
+                    modules_count=22,
+                    enrolled_count=195,
+                    description="Modern enterprise web systems: React 19, TypeScript, async FastAPI microservices, JWT authentication, and Docker container orchestration.",
+                    thumbnail="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500",
+                    progress_percentage=88
+                ),
+                Course(
+                    title="Cybersecurity, Cryptography & Network Defense",
+                    category="Computer Engineering (Security)",
+                    trainer_name="Col. Sanjeev Kapoor",
+                    duration="8 Weeks",
+                    modules_count=15,
+                    enrolled_count=134,
+                    description="Network penetration testing, cryptographic hashing (SHA-256), public-key infrastructure, salt rotation, and zero-trust security postures.",
+                    thumbnail="https://images.unsplash.com/photo-1563986768609-322da13575f3?w=500",
+                    progress_percentage=58
+                ),
+                Course(
+                    title="Cloud Computing & DevOps (AWS, Kubernetes, CI/CD)",
+                    category="Computer Engineering (Cloud/DevOps)",
+                    trainer_name="Er. Amit Chawla",
+                    duration="6 Weeks",
+                    modules_count=12,
+                    enrolled_count=172,
+                    description="Cloud architecture on AWS, Infrastructure-as-Code with Terraform, Docker swarm/Kubernetes clusters, and automated CI/CD pipelines.",
+                    thumbnail="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500",
+                    progress_percentage=72
+                ),
+                Course(
+                    title="Object-Oriented Design & System Architecture",
+                    category="Computer Engineering (Core)",
+                    trainer_name="Dr. Meenakshi Sundaram",
+                    duration="6 Weeks",
+                    modules_count=12,
+                    enrolled_count=115,
+                    description="SOLID principles, GoF design patterns, high-level and low-level system design, UML modeling, and scalable microservices patterns.",
+                    thumbnail="https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=500",
+                    progress_percentage=62
+                ),
                 Course(
                     title="AI-Enabled Computer Vision & Face Biometrics",
                     category="AI & Machine Learning",
@@ -253,6 +353,7 @@ class CreateCourseRequest(BaseModel):
     trainer_name: str
     duration: str
     description: str
+    youtube_url: Optional[str] = None
 
 class JobApplyRequest(BaseModel):
     job_id: int
@@ -516,21 +617,29 @@ def update_student(student_id: str, req: UpdateStudentRequest, db: Session = Dep
 
 @app.delete("/api/students/{student_id}")
 def delete_student(student_id: str, db: Session = Depends(get_db)):
-    """Delete a student from DB, students.csv, dataset folder, and face_engine"""
+    """Delete a student from DB, students.csv, labels.csv, dataset folder, and face_engine"""
     import shutil
+    import glob
     sid = str(student_id).strip()
 
     # 1. Delete from DB (and their attendance records)
     user = db.query(User).filter(User.student_id == sid).first()
+    if not user and sid.isdigit():
+        user = db.query(User).filter(User.id == int(sid)).first()
+    if not user:
+        user = db.query(User).filter(User.roll_number == sid).first()
+
     deleted_name = sid
     if user:
         deleted_name = user.name
+        sid = user.student_id or str(user.id)
         db.query(Attendance).filter(Attendance.user_id == user.id).delete()
         db.delete(user)
         db.commit()
 
-    # 2. Delete from students.csv
     workspace_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+    # 2. Delete from students.csv
     csv_path = os.path.join(workspace_root, "students.csv")
     if os.path.exists(csv_path):
         try:
@@ -545,7 +654,22 @@ def delete_student(student_id: str, db: Session = Depends(get_db)):
         except Exception as e:
             print(f"[API] Error deleting from students.csv: {e}")
 
-    # 3. Delete dataset folder
+    # 3. Delete from data/labels.csv
+    labels_path = os.path.join(workspace_root, "data", "labels.csv")
+    if os.path.exists(labels_path):
+        try:
+            l_rows = []
+            with open(labels_path, "r", newline="", encoding="utf-8") as f:
+                for row in csv.reader(f):
+                    if row and row[0].strip() != sid:
+                        l_rows.append(row)
+            with open(labels_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerows(l_rows)
+        except Exception as e:
+            print(f"[API] Error deleting from labels.csv: {e}")
+
+    # 4. Delete dataset folder and any root dataset images
     dataset_dir = os.path.join(workspace_root, "dataset", sid)
     if os.path.exists(dataset_dir):
         try:
@@ -553,7 +677,14 @@ def delete_student(student_id: str, db: Session = Depends(get_db)):
         except Exception as e:
             print(f"[API] Error deleting dataset folder: {e}")
 
-    # 4. Remove from face_engine cache & reload labels
+    # Remove user.<sid>.* images directly in dataset/
+    for img_file in glob.glob(os.path.join(workspace_root, "dataset", f"user.{sid}.*")):
+        try:
+            os.remove(img_file)
+        except Exception as e:
+            print(f"[API] Error removing image file {img_file}: {e}")
+
+    # 5. Remove from face_engine cache & reload labels
     if sid in face_engine.student_info_cache:
         del face_engine.student_info_cache[sid]
     if sid.isdigit() and int(sid) in face_engine.labels:
@@ -965,6 +1096,23 @@ def get_attendance_logs(student_id: Optional[str] = None, db: Session = Depends(
     logs = query.limit(50).all()
     return logs
 
+@app.post("/api/attendance/clear")
+def clear_attendance_logs(db: Session = Depends(get_db)):
+    """Clear attendance history from database and reset attendance.csv"""
+    db.query(Attendance).delete()
+    db.commit()
+
+    workspace_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    att_csv = os.path.join(workspace_root, "attendance.csv")
+    try:
+        with open(att_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID", "Name", "Date", "Time", "Method", "Status"])
+    except Exception as e:
+        print(f"[API] Error resetting attendance.csv: {e}")
+
+    return {"success": True, "message": "Attendance history cleared successfully."}
+
 # 5. Course Management
 @app.get("/api/courses")
 def get_courses(db: Session = Depends(get_db)):
@@ -972,12 +1120,14 @@ def get_courses(db: Session = Depends(get_db)):
 
 @app.post("/api/courses")
 def create_course(req: CreateCourseRequest, db: Session = Depends(get_db)):
+    yt_link = req.youtube_url or ("https://www.youtube.com/results?search_query=" + "+".join(req.title.split()))
     new_course = Course(
         title=req.title,
         category=req.category,
         trainer_name=req.trainer_name,
         duration=req.duration,
         description=req.description,
+        youtube_url=yt_link,
         modules_count=10,
         enrolled_count=1
     )
@@ -988,31 +1138,60 @@ def create_course(req: CreateCourseRequest, db: Session = Depends(get_db)):
 
 # 6. Certificate Generation
 @app.get("/api/certificates")
-def get_certificates(db: Session = Depends(get_db)):
-    return db.query(Certificate).all()
+def get_certificates(student_name: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Certificate)
+    if student_name and student_name.strip():
+        from sqlalchemy import or_
+        name = student_name.strip()
+        tokens = name.split()
+        # Match exact full name OR the first name token — avoids cross-student bleed
+        conditions = [Certificate.student_name.ilike(f"%{name}%")]
+        if tokens:
+            conditions.append(Certificate.student_name.ilike(f"{tokens[0]}"))
+        query = query.filter(or_(*conditions))
+    return query.order_by(Certificate.id.desc()).all()
 
 @app.post("/api/certificates/generate")
 def generate_cert(student_name: str = Body(..., embed=True), course_title: str = Body(..., embed=True), db: Session = Depends(get_db)):
-    cert_id = f"CS-{int(datetime.now().timestamp())}"
+    s_name = student_name.strip()
+    c_title = course_title.strip()
+
+    # Check for existing certificate for this student and course
+    existing = db.query(Certificate).filter(
+        Certificate.student_name.ilike(s_name),
+        Certificate.course_title.ilike(c_title)
+    ).first()
+    if existing:
+        return {
+            "success": True,
+            "certificate_id": existing.certificate_no,
+            "student_name": existing.student_name,
+            "course_title": existing.course_title,
+            "download_url": f"/api/certificates/download/{existing.certificate_no}",
+            "verify_url": f"/api/certificates/verify/{existing.certificate_no}",
+            "message": f"Certificate already verified for {existing.student_name}!"
+        }
+
+    cert_id = f"CS-{int(datetime.now().timestamp())}-{random.randint(100, 999)}"
     issue_date = datetime.now().strftime("%B %d, %Y")
     
     # Generate actual PDF file
     pdf_path = generate_pdf_certificate(
-        student_name=student_name,
-        course_title=course_title,
+        student_name=s_name,
+        course_title=c_title,
         cert_id=cert_id,
         grade="A+",
         issue_date=issue_date
     )
 
-    user = db.query(User).filter(User.name.ilike(student_name)).first()
+    user = db.query(User).filter(User.name.ilike(s_name)).first()
     user_id = user.id if user else 1
 
     cert = Certificate(
         certificate_no=cert_id,
         user_id=user_id,
-        student_name=student_name,
-        course_title=course_title,
+        student_name=s_name,
+        course_title=c_title,
         issue_date=issue_date,
         grade="A+",
         status="Verified"
@@ -1024,8 +1203,8 @@ def generate_cert(student_name: str = Body(..., embed=True), course_title: str =
     return {
         "success": True,
         "certificate_id": cert_id,
-        "student_name": student_name,
-        "course_title": course_title,
+        "student_name": s_name,
+        "course_title": c_title,
         "download_url": f"/api/certificates/download/{cert_id}",
         "verify_url": f"/api/certificates/verify/{cert_id}"
     }

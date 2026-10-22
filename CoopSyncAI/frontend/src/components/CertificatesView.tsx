@@ -22,33 +22,71 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser 
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [verifyModalCert, setVerifyModalCert] = useState<CertificateItem | null>(null);
 
+  // Load certificates filtered for the current student whenever the user changes
   useEffect(() => {
     loadCertificates();
-  }, []);
+  }, [currentUser.name]);
 
   const loadCertificates = async () => {
     try {
-      const res = await fetchCertificates();
+      const res = await fetchCertificates(currentUser.name);
       setCertificates(res);
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleGenerateCertificate = async () => {
+  // Get the list of courses this student enrolled in (from per-student localStorage)
+  const getEnrolledCourseIds = (): number[] => {
+    try {
+      const key = `coopsync_enrolled_courses_${currentUser.student_id}`;
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleGenerateCertificatesForEnrolled = async () => {
     setIsGenerating(true);
     try {
-      const res = await generateCertificate(
-        currentUser.name,
-        "AI-Enabled Computer Vision & Face Biometrics"
-      );
-      if (res.success) {
-        confetti({
-          particleCount: 70,
-          spread: 80,
-          origin: { y: 0.5 }
-        });
-        loadCertificates();
+      const enrolledIds = getEnrolledCourseIds();
+      if (enrolledIds.length === 0) {
+        // Fallback: generate for the default course
+        const res = await generateCertificate(
+          currentUser.name,
+          'AI-Enabled Computer Vision & Face Biometrics'
+        );
+        if (res.success) {
+          confetti({ particleCount: 70, spread: 80, origin: { y: 0.5 } });
+          await loadCertificates();
+        }
+        return;
+      }
+
+      // Fetch all courses to map IDs to titles
+      let courseTitles: string[] = [];
+      try {
+        const { fetchCourses } = await import('../api');
+        const allCourses = await fetchCourses();
+        courseTitles = allCourses
+          .filter((c: any) => enrolledIds.includes(c.id))
+          .map((c: any) => c.title as string);
+      } catch {
+        courseTitles = ['AI-Enabled Computer Vision & Face Biometrics'];
+      }
+
+      let generated = 0;
+      for (const title of courseTitles) {
+        try {
+          const res = await generateCertificate(currentUser.name, title);
+          if (res.success) generated++;
+        } catch {}
+      }
+
+      if (generated > 0) {
+        confetti({ particleCount: 100, spread: 100, origin: { y: 0.5 } });
+        await loadCertificates();
       }
     } catch (e) {
       console.error(e);
@@ -85,13 +123,13 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser 
         </div>
 
         <button
-          onClick={handleGenerateCertificate}
+          onClick={handleGenerateCertificatesForEnrolled}
           disabled={isGenerating}
           className="gradient-btn gradient-btn-success"
           style={{ padding: '10px 18px', fontSize: '0.85rem' }}
         >
           <Sparkles size={16} />
-          {isGenerating ? 'Rendering PDF...' : `Issue Certificate for ${currentUser.name}`}
+          {isGenerating ? 'Rendering PDFs...' : `Issue Certificates for ${currentUser.name}`}
         </button>
       </div>
 
@@ -185,7 +223,25 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser 
         ))}
       </div>
 
-      {/* Verification Modal */}
+      {/* Empty State when no certificates for this student */}
+      {certificates.length === 0 && (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          background: 'rgba(245, 158, 11, 0.04)',
+          borderRadius: '16px',
+          border: '1px dashed rgba(245, 158, 11, 0.2)'
+        }}>
+          <FileCheck size={48} color="#f59e0b" style={{ margin: '0 auto 16px auto', opacity: 0.5 }} />
+          <h4 style={{ color: '#f8fafc', fontSize: '1.15rem', marginBottom: '8px' }}>
+            No Certificates for {currentUser.name} Yet
+          </h4>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', maxWidth: '420px', margin: '0 auto 20px auto' }}>
+            Enroll in courses from the <strong style={{ color: '#818cf8' }}>Courses</strong> tab first, then click <strong style={{ color: '#10b981' }}>Issue Certificates</strong> above to generate verified credentials.
+          </p>
+        </div>
+      )}
+
       {verifyModalCert && (
         <div style={{
           position: 'fixed',
