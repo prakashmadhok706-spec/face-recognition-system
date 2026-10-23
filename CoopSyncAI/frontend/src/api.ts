@@ -41,6 +41,21 @@ export async function fetchStudents() {
   }
 }
 
+export async function fetchAdmins() {
+  try {
+    const res = await fetch(`${API_BASE}/admins`);
+    if (!res.ok) throw new Error('Network error');
+    return await res.json();
+  } catch (e) {
+    try {
+      const fallback = await fetch('http://127.0.0.1:8000/api/admins');
+      return await fallback.json();
+    } catch {
+      return [];
+    }
+  }
+}
+
 export async function recognizeFaceImage(base64Image: string, studentId?: string) {
   const body: Record<string, string> = { image_base64: base64Image };
   if (studentId) body.student_id = studentId;
@@ -100,6 +115,43 @@ export async function syncOfflineAttendance(records: any[]) {
     body: JSON.stringify({ records }),
   });
   return await res.json();
+}
+
+export async function updateAttendanceApi(attId: number, data: { status?: string; method?: string; time?: string; date?: string }) {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/${attId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
+}
+
+export async function manualAttendanceApi(data: { student_id: string; date?: string; time?: string; status?: string; method?: string }) {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
+}
+
+export async function deleteAttendanceApi(attId: number) {
+  try {
+    const res = await fetch(`${API_BASE}/attendance/${attId}`, {
+      method: 'DELETE',
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
 }
 
 export async function fetchCourses() {
@@ -174,7 +226,13 @@ export async function addStudentApi(studentData: any) {
   }
 }
 
-export async function captureSampleApi(sampleData: any) {
+export async function captureSampleApi(sampleData: {
+  student_id: string;
+  student_name: string;
+  image_base64: string;
+  requester_role?: string;
+  target_samples?: number;
+}) {
   try {
     const res = await fetch(`${API_BASE}/students/capture-sample`, {
       method: 'POST',
@@ -183,19 +241,56 @@ export async function captureSampleApi(sampleData: any) {
     });
     return await safeJson(res);
   } catch (err: any) {
-    return { success: false, message: `Network error: ${err.message}`, samples_count: 0 };
+    return { success: false, error: `Network error: ${err.message}`, message: err.message, samples_count: 0 };
   }
 }
 
-export async function trainModelApi() {
+export async function resetStudentSamplesApi(studentId: string, requesterRole: string = 'admin') {
   try {
-    const res = await fetch(`${API_BASE}/train-model`, {
+    const res = await fetch(`${API_BASE}/students/${encodeURIComponent(studentId)}/reset-samples`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requester_role: requesterRole }),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, error: err.message, message: `Network error: ${err.message}` };
+  }
+}
+
+export async function fetchStudentSamplesCountApi(studentId: string) {
+  try {
+    const res = await fetch(`${API_BASE}/students/${encodeURIComponent(studentId)}/samples-count`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, samples_count: 0, error: err.message };
+  }
+}
+
+export async function triggerRetrainModelApi(requesterRole: string = 'admin') {
+  try {
+    const res = await fetch(`${API_BASE}/train`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requester_role: requesterRole }),
     });
     return await safeJson(res);
   } catch (err: any) {
     return { success: false, message: `Network error: ${err.message}` };
   }
+}
+
+export async function fetchRetrainStatusApi() {
+  try {
+    const res = await fetch(`${API_BASE}/train/status`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return { status: 'failed', progress: 0, message: `Polling error: ${err.message}` };
+  }
+}
+
+export async function trainModelApi(requesterRole: string = 'admin') {
+  return await triggerRetrainModelApi(requesterRole);
 }
 
 export async function updateStudentApi(studentId: string, studentData: any) {
@@ -220,5 +315,19 @@ export async function clearAttendanceLogsApi() {
   });
   return await res.json();
 }
+
+export async function loginUserApi(emailOrId: string, password: string = 'admin123') {
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_or_id: emailOrId, password }),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
+}
+
 
 

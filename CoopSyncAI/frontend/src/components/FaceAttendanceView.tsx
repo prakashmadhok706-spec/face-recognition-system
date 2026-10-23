@@ -15,8 +15,9 @@ import {
   Database,
   Trash2
 } from 'lucide-react';
-import { recognizeFaceImage, launchDesktopOpenCVCamera, fetchAttendanceLogs, trainModelApi, clearAttendanceLogsApi } from '../api';
+import { recognizeFaceImage, launchDesktopOpenCVCamera, fetchAttendanceLogs, trainModelApi, clearAttendanceLogsApi, fetchStudents } from '../api';
 import { AttendanceRecord, UserProfile } from '../types';
+import { WebFaceEnrollmentModal } from './WebFaceEnrollmentModal';
 import confetti from 'canvas-confetti';
 
 interface FaceAttendanceViewProps {
@@ -45,6 +46,21 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
   const [isTraining, setIsTraining] = useState<boolean>(false);
   const [trainStatus, setTrainStatus] = useState<string>('LBPH Model Ready (data/classifier.xml)');
   const [trainMetrics, setTrainMetrics] = useState<any | null>(null);
+
+  // Web Face Enrollment Modal State
+  const [showWebEnrollModal, setShowWebEnrollModal] = useState<boolean>(false);
+  const [studentsList, setStudentsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    startCamera();
+    loadLogs();
+    fetchStudents().then(data => {
+      if (Array.isArray(data)) setStudentsList(data);
+    }).catch(() => {});
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   // --- Offline local simulation (used when backend is unreachable) ---
   const simulateLocalRecognition = (studentId?: string, studentName?: string) => {
@@ -112,13 +128,7 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
     }
   };
 
-  useEffect(() => {
-    startCamera();
-    loadLogs();
-    return () => {
-      stopCamera();
-    };
-  }, []);
+
 
   const loadLogs = async () => {
     try {
@@ -327,6 +337,26 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {currentUser.role !== 'student' && (
+            <button
+              onClick={() => setShowWebEnrollModal(true)}
+              className="gradient-btn"
+              style={{
+                padding: '10px 18px',
+                fontSize: '0.85rem',
+                background: 'linear-gradient(135deg, #10b981, #0d9488)',
+                color: '#ffffff',
+                border: 'none',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                cursor: 'pointer'
+              }}
+              title="Open Webcam Biometric Face Enrollment & Asynchronous Retraining"
+            >
+              <Camera size={16} />
+              Web Face Enrollment
+            </button>
+          )}
+
           <button
             onClick={handleTrainModel}
             disabled={isTraining}
@@ -1059,6 +1089,18 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
           </table>
         </div>
       </div>
+
+      {showWebEnrollModal && (
+        <WebFaceEnrollmentModal
+          isOpen={showWebEnrollModal}
+          onClose={() => setShowWebEnrollModal(false)}
+          currentUser={currentUser}
+          studentsList={studentsList}
+          onEnrollmentComplete={() => {
+            fetchStudents().then(data => { if (Array.isArray(data)) setStudentsList(data); });
+          }}
+        />
+      )}
     </div>
   );
 };

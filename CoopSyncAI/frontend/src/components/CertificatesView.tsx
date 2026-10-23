@@ -122,15 +122,21 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser 
           </p>
         </div>
 
-        <button
-          onClick={handleGenerateCertificatesForEnrolled}
-          disabled={isGenerating}
-          className="gradient-btn gradient-btn-success"
-          style={{ padding: '10px 18px', fontSize: '0.85rem' }}
-        >
-          <Sparkles size={16} />
-          {isGenerating ? 'Rendering PDFs...' : `Issue Certificates for ${currentUser.name}`}
-        </button>
+        {currentUser.role !== 'student' ? (
+          <button
+            onClick={handleGenerateCertificatesForEnrolled}
+            disabled={isGenerating}
+            className="gradient-btn gradient-btn-success"
+            style={{ padding: '10px 18px', fontSize: '0.85rem' }}
+          >
+            <Sparkles size={16} />
+            {isGenerating ? 'Rendering PDFs...' : `Issue & Validate Cohort Certificates`}
+          </button>
+        ) : (
+          <span className="badge badge-gold" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
+            <ShieldCheck size={14} /> Verified Student Credentials (Read-Only)
+          </span>
+        )}
       </div>
 
       {/* Certificates Grid */}

@@ -13,7 +13,9 @@ import {
   RefreshCw,
   UserCheck,
   Calendar,
-  Cpu
+  Cpu,
+  LogOut,
+  ClipboardCheck
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -27,6 +29,7 @@ interface NavbarProps {
   offlineCount: number;
   onSyncOffline: () => void;
   isSyncing: boolean;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -39,10 +42,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   offlineCount,
   onSyncOffline,
   isSyncing,
+  onLogout,
 }) => {
-  const navItems = [
+  const isStudentPortal = currentUser.role === 'student';
+
+  const adminNavItems = [
     { id: 'dashboard', label: 'Analytics', icon: LayoutDashboard },
-    { id: 'face-attendance', label: 'Face AI', icon: Camera, highlight: true },
+    { id: 'attendance-records', label: 'Attendance Roster', icon: ClipboardCheck, highlight: true },
+    { id: 'face-attendance', label: 'Face AI', icon: Camera },
     { id: 'qr-attendance', label: 'QR Attendance', icon: QrCode },
     { id: 'programmes', label: 'Programmes', icon: Calendar },
     { id: 'students', label: 'Student ERP', icon: GraduationCap },
@@ -51,6 +58,23 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'jobs', label: 'Job Portal', icon: Briefcase },
     { id: 'ai-assistant', label: 'AI Advisor', icon: Bot },
   ];
+
+  const studentNavItems = [
+    { id: 'courses', label: 'My Courses', icon: BookOpen },
+    { id: 'face-attendance', label: 'Face AI Attendance', icon: Camera, highlight: true },
+    { id: 'qr-attendance', label: 'QR Check-In', icon: QrCode },
+    { id: 'programmes', label: 'Programmes', icon: Calendar },
+    { id: 'certificates', label: 'My Certificates', icon: Award },
+    { id: 'jobs', label: 'Job Board', icon: Briefcase },
+    { id: 'students', label: 'Student Directory', icon: GraduationCap },
+    { id: 'ai-assistant', label: 'AI Advisor', icon: Bot },
+  ];
+
+  const navItems = isStudentPortal ? studentNavItems : adminNavItems;
+
+  const displayedUsers = allUsers.filter(u => 
+    isStudentPortal ? u.role === 'student' : u.role !== 'student'
+  );
 
   return (
     <header style={{
@@ -90,9 +114,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
                 CoopSync <span className="gradient-text">AI</span>
               </span>
-              <span className="badge badge-indigo" style={{ fontSize: '0.65rem' }}>
-                NCCT Enterprise ERP
-              </span>
+              {isStudentPortal ? (
+                <span className="badge badge-cyan" style={{ fontSize: '0.65rem' }}>
+                  STUDENT PORTAL
+                </span>
+              ) : (
+                <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>
+                  ADMIN PORTAL • NCCT
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               Cooperative ERP, Face Biometrics & Employment Ecosystem
@@ -200,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <select
                 value={currentUser.id}
                 onChange={(e) => {
-                  const selected = allUsers.find(u => u.id === Number(e.target.value));
+                  const selected = displayedUsers.find(u => u.id === Number(e.target.value));
                   if (selected) setCurrentUser(selected);
                 }}
                 style={{
@@ -213,17 +243,49 @@ export const Navbar: React.FC<NavbarProps> = ({
                   outline: 'none'
                 }}
               >
-                {allUsers.map((u) => (
+                {displayedUsers.map((u) => (
                   <option key={u.id} value={u.id} style={{ background: '#0f1527', color: '#f8fafc' }}>
                     {u.name} ({u.role.toUpperCase()})
                   </option>
                 ))}
               </select>
               <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>
-                ID: {currentUser.student_id || 'ADMIN'}
+                ID: {currentUser.student_id || 'STAFF-ADMIN'}
               </span>
             </div>
           </div>
+
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              title="Sign Out & Return to Landing Page"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#f87171',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+              }}
+            >
+              <LogOut size={14} />
+              <span>Exit Portal</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

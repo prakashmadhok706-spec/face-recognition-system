@@ -44,18 +44,22 @@ export const AnalyticsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    loadAnalytics();
+    loadAnalytics(true);
+    const interval = setInterval(() => {
+      loadAnalytics(false);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
-  const loadAnalytics = async () => {
+  const loadAnalytics = async (showLoading = false) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsLoading(true);
       const res = await fetchAnalytics();
       setData(res);
     } catch (e) {
       console.error('Failed to load analytics', e);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   };
 

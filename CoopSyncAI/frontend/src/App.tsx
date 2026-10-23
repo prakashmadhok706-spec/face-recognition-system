@@ -9,7 +9,9 @@ import { CertificatesView } from './components/CertificatesView';
 import { EmploymentView } from './components/EmploymentView';
 import { AIChatModal } from './components/AIChatModal';
 import { ProgrammesView } from './components/ProgrammesView';
-import { fetchHealth, fetchStudents, syncOfflineAttendance } from './api';
+import { LandingPage } from './components/LandingPage';
+import { AttendanceManagerView } from './components/AttendanceManagerView';
+import { fetchHealth, fetchStudents, fetchAdmins, syncOfflineAttendance } from './api';
 import { UserProfile } from './types';
 
 
@@ -97,6 +99,14 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [allUsers, setAllUsers] = useState<UserProfile[]>(DEFAULT_USERS);
   const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_USERS[0]);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const saved = sessionStorage.getItem('coopsync_session');
+      return !!saved;
+    } catch {
+      return false;
+    }
+  });
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [offlineQueue, setOfflineQueue] = useState<any[]>(() => {
     try {
@@ -128,33 +138,44 @@ export const App: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      const students = await fetchStudents();
-      if (students && students.length > 0) {
-        const merged = [
-          ...students.map((s: any) => ({
-            id: s.id,
-            student_id: s.student_id,
-            roll_number: s.roll_number,
-            name: s.name,
-            email: s.email,
-            role: 'student' as const,
-            department: s.department,
-            semester: s.semester,
-            skills: s.skills,
-            avatar: s.avatar
-          })),
-          DEFAULT_USERS[2], // NCCT Admin
-          DEFAULT_USERS[3], // Institution Admin
-          DEFAULT_USERS[4], // Trainer
-          DEFAULT_USERS[5]  // Employer
-        ];
-        setAllUsers(merged);
-        // Sync currentUser with freshly loaded data (updates stale name/skills/avatar)
-        setCurrentUser(prev => {
-          const freshProfile = merged.find(u => u.id === prev.id);
-          return freshProfile || prev;
-        });
-      }
+      const [students, admins] = await Promise.all([
+        fetchStudents(),
+        fetchAdmins()
+      ]);
+
+      const mergedStudents = (students && students.length > 0) ? students.map((s: any) => ({
+        id: s.id,
+        student_id: s.student_id,
+        roll_number: s.roll_number,
+        name: s.name,
+        email: s.email,
+        role: 'student' as const,
+        department: s.department,
+        semester: s.semester,
+        skills: s.skills,
+        avatar: s.avatar
+      })) : [DEFAULT_USERS[0], DEFAULT_USERS[1]];
+
+      const mergedAdmins = (admins && admins.length > 0) ? admins.map((a: any) => ({
+        id: a.id,
+        student_id: a.student_id,
+        roll_number: a.roll_number,
+        name: a.name,
+        email: a.email,
+        role: a.role as any,
+        department: a.department,
+        semester: a.semester,
+        degree: a.degree,
+        skills: a.skills,
+        avatar: a.avatar
+      })) : [DEFAULT_USERS[2], DEFAULT_USERS[3], DEFAULT_USERS[4], DEFAULT_USERS[5]];
+
+      const merged = [...mergedStudents, ...mergedAdmins];
+      setAllUsers(merged);
+      setCurrentUser(prev => {
+        const freshProfile = merged.find(u => u.id === prev.id);
+        return freshProfile || prev;
+      });
     } catch (e) {
       console.warn('Using default users', e);
     }
@@ -181,6 +202,38 @@ export const App: React.FC = () => {
     checkHealth();
   };
 
+  const handleLoginSuccess = (user: UserProfile, targetTab?: string) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    try {
+      sessionStorage.setItem('coopsync_session', JSON.stringify({ userId: user.id }));
+    } catch {}
+    if (targetTab) {
+      setActiveTab(targetTab);
+    } else if (user.role === 'admin' || user.role === 'ncct_admin' || user.role === 'institution_admin') {
+      setActiveTab('dashboard');
+    } else {
+      setActiveTab('courses');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    try {
+      sessionStorage.removeItem('coopsync_session');
+    } catch {}
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <LandingPage
+        allUsers={allUsers}
+        isOnline={isOnline}
+        onLoginSuccess={handleLoginSuccess}
+      />
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Top Navigation */}
@@ -194,6 +247,7 @@ export const App: React.FC = () => {
         offlineCount={offlineQueue.length}
         onSyncOffline={handleSyncOffline}
         isSyncing={isSyncing}
+        onLogout={handleLogout}
       />
 
       {/* Main Container */}
@@ -205,6 +259,7 @@ export const App: React.FC = () => {
         padding: '28px 24px 60px 24px'
       }}>
         {activeTab === 'dashboard' && <AnalyticsView />}
+        {activeTab === 'attendance-records' && <AttendanceManagerView currentUser={currentUser} />}
         {activeTab === 'programmes' && <ProgrammesView currentUser={currentUser} />}
         {activeTab === 'face-attendance' && (
           <FaceAttendanceView

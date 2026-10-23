@@ -19,9 +19,10 @@ import {
   ShieldCheck,
   CheckCircle2,
   ExternalLink,
-  Play
+  Play,
+  Image as ImageIcon
 } from 'lucide-react';
-import { fetchCourses, createCourse, generateCertificate } from '../api';
+import { fetchCourses, createCourse, generateCertificate, updateStudentApi } from '../api';
 import { CourseItem, UserProfile } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -49,6 +50,41 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
   const [newDuration, setNewDuration] = useState<string>('8 Weeks');
   const [newDesc, setNewDesc] = useState<string>('');
   const [newYtUrl, setNewYtUrl] = useState<string>('');
+  const [newThumbnail, setNewThumbnail] = useState<string>('');
+  const [enrollToast, setEnrollToast] = useState<string | null>(null);
+
+  // Extract YouTube Video ID & Thumbnail
+  const extractYouTubeId = (url: string): string | null => {
+    if (!url) return null;
+    const match = url.match(/(?:v=|\/|embed\/|youtu\.be\/)([0-9A-Za-z_-]{11})/);
+    return match ? match[1] : null;
+  };
+
+  const getYouTubeThumbnail = (url: string): string | null => {
+    const vidId = extractYouTubeId(url);
+    return vidId ? `https://img.youtube.com/vi/${vidId}/hqdefault.jpg` : null;
+  };
+
+  // Map course title and category to technical competencies/skills
+  const getSkillsForCourse = (course: CourseItem): string[] => {
+    const t = (course.title || '').toLowerCase();
+    const c = (course.category || '').toLowerCase();
+    if (t.includes('data structures') || t.includes('dsa')) return ['Data Structures', 'Algorithms', 'C++'];
+    if (t.includes('operating systems') || t.includes('os')) return ['Operating Systems', 'Linux Kernel', 'C'];
+    if (t.includes('database') || t.includes('dbms') || t.includes('sql')) return ['PostgreSQL', 'SQL', 'Database Design'];
+    if (t.includes('network')) return ['Computer Networks', 'TCP/IP', 'Sockets'];
+    if (t.includes('artificial intelligence') || t.includes('deep learning') || t.includes('computer vision') || t.includes('face biometrics')) {
+      return ['OpenCV', 'PyTorch', 'Computer Vision', 'Deep Learning'];
+    }
+    if (t.includes('full-stack') || t.includes('software engineering') || t.includes('web')) {
+      return ['React', 'TypeScript', 'FastAPI', 'REST APIs'];
+    }
+    if (t.includes('cybersecurity') || t.includes('cryptography')) return ['Cybersecurity', 'Cryptography', 'Network Security'];
+    if (t.includes('cloud') || t.includes('devops')) return ['AWS Cloud', 'Docker', 'CI/CD'];
+    if (c.includes('ai') || c.includes('vision')) return ['OpenCV', 'Machine Learning', 'Python'];
+    if (c.includes('software')) return ['Software Engineering', 'System Design', 'Git'];
+    return ['Python', 'Software Engineering'];
+  };
 
   // Course Syllabus / Modules Modal State
   const [activeCourseModal, setActiveCourseModal] = useState<CourseItem | null>(null);
@@ -94,18 +130,22 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
     e.preventDefault();
     if (!newTitle) return;
     try {
+      const autoThumb = getYouTubeThumbnail(newYtUrl);
+      const thumbToUse = newThumbnail.trim() || autoThumb || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600";
       await createCourse({
         title: newTitle,
         category: newCategory,
         trainer_name: newTrainer || currentUser.name,
         duration: newDuration,
         description: newDesc,
-        youtube_url: newYtUrl
+        youtube_url: newYtUrl,
+        thumbnail: thumbToUse
       });
       setShowModal(false);
       setNewTitle('');
       setNewDesc('');
       setNewYtUrl('');
+      setNewThumbnail('');
       loadCourses();
     } catch (e) {
       console.error(e);
@@ -122,12 +162,32 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
         } catch (e) {
           console.warn('Storage save error:', e);
         }
-        // Auto-generate certificate for this student + course
+        
         const course = courses.find(c => c.id === courseId);
         if (course) {
+          // 1. Auto-generate certificate for this student + course
           generateCertificate(currentUser.name, course.title)
             .then(() => console.log(`Certificate generated for ${currentUser.name} – ${course.title}`))
             .catch(e => console.warn('Certificate generation error:', e));
+
+          // 2. Auto-update student skills in ERP Capacity profile & SQLite database
+          if (currentUser.student_id) {
+            const courseSkills = getSkillsForCourse(course);
+            const currentSkillsArr = currentUser.skills 
+              ? currentUser.skills.split(',').map(s => s.trim()).filter(Boolean)
+              : [];
+            const combined = Array.from(new Set([...currentSkillsArr, ...courseSkills]));
+            const updatedSkillsStr = combined.join(', ');
+            
+            currentUser.skills = updatedSkillsStr;
+            updateStudentApi(currentUser.student_id, { skills: updatedSkillsStr })
+              .then((res) => {
+                console.log('Student skills updated via course enrollment:', res);
+                setEnrollToast(`🎉 Successfully Enrolled in ${course.title}! Updated Capacity Profile Tech Stack with: ${courseSkills.join(', ')}`);
+                setTimeout(() => setEnrollToast(null), 7000);
+              })
+              .catch(e => console.warn('Skills update error:', e));
+          }
         }
         confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
         return next;
@@ -329,15 +389,57 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
 
         {/* Action Header Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setShowModal(true)}
-            className="gradient-btn"
-            style={{ padding: '10px 18px', fontSize: '0.85rem' }}
-          >
-            <Plus size={16} /> Create New Course
-          </button>
+          {currentUser.role !== 'student' ? (
+            <button
+              onClick={() => setShowModal(true)}
+              className="gradient-btn"
+              style={{ padding: '10px 18px', fontSize: '0.85rem' }}
+            >
+              <Plus size={16} /> Create New Course
+            </button>
+          ) : (
+            <span className="badge badge-indigo" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
+              <BookOpen size={14} /> Student Curriculum (Read-Only)
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Enrollment & Tech Stack Sync Toast Banner */}
+      {enrollToast && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '14px 20px',
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(99, 102, 241, 0.2))',
+          border: '1px solid #10b981',
+          borderRadius: '12px',
+          color: '#f8fafc',
+          fontSize: '0.88rem',
+          boxShadow: '0 4px 20px rgba(16, 185, 129, 0.2)',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Sparkles size={18} color="#34d399" />
+            <span>{enrollToast}</span>
+          </div>
+          <button
+            onClick={() => setEnrollToast(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#f8fafc',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '1rem',
+              padding: '0 4px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Filter Tabs and Search Bar */}
       <div style={{
@@ -434,12 +536,15 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
 
           return (
             <div key={course.id} className="glass-card-interactive" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-              {/* Thumbnail */}
-              <div style={{ position: 'relative', height: '175px', width: '100%', overflow: 'hidden' }}>
+              {/* Thumbnail with YouTube Link Overlay */}
+              <div style={{ position: 'relative', height: '180px', width: '100%', overflow: 'hidden', background: '#0a0f1d' }}>
                 <img
-                  src={course.thumbnail}
+                  src={course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600'}
                   alt={course.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600';
+                  }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }}
                 />
                 <span className="badge badge-indigo" style={{ position: 'absolute', top: '12px', left: '12px', backdropFilter: 'blur(8px)' }}>
                   {course.category}
@@ -450,6 +555,49 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
                     <Sparkles size={10} /> Popular CE Course
                   </span>
                 )}
+
+                {/* Direct YouTube Link Badge */}
+                <a
+                  href={getCourseYouTubeUrl(course)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    right: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    background: 'rgba(15, 23, 42, 0.88)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(239, 68, 68, 0.55)',
+                    borderRadius: '20px',
+                    padding: '4px 10px',
+                    color: '#ffffff',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    transition: 'all 0.2s ease',
+                    zIndex: 2
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(220, 38, 38, 0.95)';
+                    e.currentTarget.style.borderColor = '#ef4444';
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(15, 23, 42, 0.88)';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.55)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                  title="Open YouTube video lecture"
+                >
+                  <YoutubeIcon size={14} color="#ef4444" />
+                  <span>YouTube Link</span>
+                  <ExternalLink size={10} />
+                </a>
               </div>
 
               {/* Content */}
@@ -935,11 +1083,49 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
 
               <div>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>YouTube Video / Playlist URL</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="url"
+                    placeholder="e.g. https://www.youtube.com/watch?v=..."
+                    value={newYtUrl}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      setNewYtUrl(url);
+                      const autoThumb = getYouTubeThumbnail(url);
+                      if (autoThumb) {
+                        setNewThumbnail(autoThumb);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px 10px 36px',
+                      borderRadius: '8px',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#fff',
+                      marginTop: '4px'
+                    }}
+                  />
+                  <div style={{ position: 'absolute', left: '10px', top: '14px', pointerEvents: 'none' }}>
+                    <YoutubeIcon size={16} />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Course Cover Image / Thumbnail URL</label>
+                  {(newThumbnail || getYouTubeThumbnail(newYtUrl)) && (
+                    <span style={{ fontSize: '0.7rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      <CheckCircle2 size={12} /> Image Preview Ready
+                    </span>
+                  )}
+                </div>
                 <input
                   type="url"
-                  placeholder="e.g. https://www.youtube.com/watch?v=..."
-                  value={newYtUrl}
-                  onChange={(e) => setNewYtUrl(e.target.value)}
+                  placeholder="https://... or automatically fetched from YouTube link above"
+                  value={newThumbnail}
+                  onChange={(e) => setNewThumbnail(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
@@ -950,6 +1136,62 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
                     marginTop: '4px'
                   }}
                 />
+
+                {/* Live Thumbnail Preview & Quick Presets */}
+                <div style={{ marginTop: '8px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <div style={{
+                    width: '90px',
+                    height: '52px',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    background: '#1e293b',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    flexShrink: 0
+                  }}>
+                    <img
+                      src={newThumbnail || getYouTubeThumbnail(newYtUrl) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500'}
+                      alt="Thumbnail Preview"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500';
+                      }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Image Presets:</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setNewThumbnail('https://images.unsplash.com/photo-1555255707-c07966088b7b?w=600')}
+                        style={{ padding: '3px 8px', fontSize: '0.68rem', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#38bdf8', cursor: 'pointer' }}
+                      >
+                        🤖 AI / CV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewThumbnail('https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600')}
+                        style={{ padding: '3px 8px', fontSize: '0.68rem', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#a78bfa', cursor: 'pointer' }}
+                      >
+                        💻 Web / App
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewThumbnail('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600')}
+                        style={{ padding: '3px 8px', fontSize: '0.68rem', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f87171', cursor: 'pointer' }}
+                      >
+                        🔒 Security
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewThumbnail('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600')}
+                        style={{ padding: '3px 8px', fontSize: '0.68rem', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#34d399', cursor: 'pointer' }}
+                      >
+                        ☁️ Cloud
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div>

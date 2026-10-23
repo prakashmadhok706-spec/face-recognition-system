@@ -155,13 +155,19 @@ export const ProgrammesView: React.FC<ProgrammesViewProps> = ({ currentUser }) =
           </p>
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="gradient-btn"
-          style={{ padding: '10px 18px', fontSize: '0.85rem' }}
-        >
-          <Plus size={16} /> + New Programme
-        </button>
+        {currentUser.role !== 'student' ? (
+          <button
+            onClick={() => setShowModal(true)}
+            className="gradient-btn"
+            style={{ padding: '10px 18px', fontSize: '0.85rem' }}
+          >
+            <Plus size={16} /> + New Programme
+          </button>
+        ) : (
+          <span className="badge badge-emerald" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
+            <Building2 size={13} /> Trainee Portal (Read-Only)
+          </span>
+        )}
       </div>
 
       {/* Stats Quick Grid */}
