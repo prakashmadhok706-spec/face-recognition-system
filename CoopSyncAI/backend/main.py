@@ -22,7 +22,7 @@ from database import init_db, get_db, User, Attendance, Course, Certificate, Job
 from face_engine import face_engine
 from qr_engine import generate_dynamic_attendance_qr, verify_attendance_qr, mark_qr_session_used
 from certificate_engine import generate_pdf_certificate, CERTIFICATES_DIR
-from ai_engine import calculate_skill_match, get_ai_chat_response
+from ai_engine import calculate_skill_match, get_ai_chat_response, get_ai_config, update_ai_config
 
 app = FastAPI(
     title="CoopSync AI - Cooperative ERP & Employment Ecosystem",
@@ -2062,7 +2062,7 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
         
     att_count = db.query(Attendance).filter(Attendance.user_id == user.id).count()
     jobs_data = [{"title": j.title, "company": j.company, "salary": j.salary, "required_skills": j.required_skills} for j in db.query(Job).all()]
-    courses_data = [{"title": c.title, "duration": c.duration} for c in db.query(Course).all()]
+    courses_data = [{"title": c.title, "duration": c.duration, "category": getattr(c, 'category', 'General')} for c in db.query(Course).all()]
 
     user_dict = {
         "name": user.name,
@@ -2071,6 +2071,27 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
     }
     
     return get_ai_chat_response(req.query, user_dict, att_count, jobs_data, courses_data)
+
+# ── AI Configuration (Settings Panel) ──────────────────────────────────────────
+class AIConfigRequest(BaseModel):
+    provider: Optional[str] = None          # "gemini" | "groq" | "openrouter"
+    api_key: Optional[str] = None           # raw API key entered in settings UI
+    model: Optional[str] = None             # optional model override
+
+@app.get("/api/ai/config")
+def get_ai_config_endpoint():
+    """Return current AI provider configuration (never exposes the key itself)"""
+    return get_ai_config()
+
+@app.post("/api/ai/config")
+def update_ai_config_endpoint(req: AIConfigRequest):
+    """Persist provider, API key, and optional model to in-memory config and .env file"""
+    result = update_ai_config(
+        provider=req.provider,
+        api_key=req.api_key,
+        model=req.model
+    )
+    return result
 
 if __name__ == "__main__":
     import uvicorn
