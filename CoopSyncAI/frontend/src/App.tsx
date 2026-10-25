@@ -213,7 +213,7 @@ export const App: React.FC = () => {
     } else if (user.role === 'admin' || user.role === 'ncct_admin' || user.role === 'institution_admin') {
       setActiveTab('dashboard');
     } else {
-      setActiveTab('courses');
+      setActiveTab('dashboard');
     }
   };
 
@@ -258,7 +258,7 @@ export const App: React.FC = () => {
         margin: '0 auto',
         padding: '28px 24px 60px 24px'
       }}>
-        {activeTab === 'dashboard' && <AnalyticsView />}
+        {activeTab === 'dashboard' && <AnalyticsView currentUser={currentUser} />}
         {activeTab === 'attendance-records' && <AttendanceManagerView currentUser={currentUser} />}
         {activeTab === 'programmes' && <ProgrammesView currentUser={currentUser} />}
         {activeTab === 'face-attendance' && (

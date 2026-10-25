@@ -60,8 +60,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   const studentNavItems = [
+    { id: 'dashboard', label: 'My Analytics & Graphs', icon: LayoutDashboard, highlight: true },
     { id: 'courses', label: 'My Courses', icon: BookOpen },
-    { id: 'face-attendance', label: 'Face AI Attendance', icon: Camera, highlight: true },
+    { id: 'face-attendance', label: 'Face AI Attendance', icon: Camera },
     { id: 'qr-attendance', label: 'QR Check-In', icon: QrCode },
     { id: 'programmes', label: 'Programmes', icon: Calendar },
     { id: 'certificates', label: 'My Certificates', icon: Award },

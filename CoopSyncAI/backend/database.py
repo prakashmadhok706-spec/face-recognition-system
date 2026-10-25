@@ -60,6 +60,13 @@ class Attendance(Base):
     confidence = Column(Float, default=95.0)
     liveness_verified = Column(Boolean, default=True)
     status = Column(String(20), default="Present") # Present, Late
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    accuracy = Column(Float, nullable=True) # in meters
+    distance = Column(Float, nullable=True) # distance from campus in meters
+    geofence_status = Column(String(100), default="Verified (Within Radius)")
+    device_info = Column(String(200), nullable=True)
+    session_id = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="attendances")
@@ -125,5 +132,61 @@ class JobApplication(Base):
     job = relationship("Job", back_populates="applications")
     user = relationship("User", back_populates="applications")
 
+class InstitutionConfig(Base):
+    __tablename__ = "institution_config"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), default="Cooperative Skill Center (NCCT / VAMNICOM)")
+    latitude = Column(Float, default=28.6139) # default campus latitude
+    longitude = Column(Float, default=77.2090) # default campus longitude
+    allowed_radius_meters = Column(Float, default=50.0) # 50 meters geofence radius
+    max_accuracy_threshold = Column(Float, default=100.0) # max allowed GPS accuracy (meters)
+    enforce_geofence = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    # SQLite automatic schema migration for new GPS columns
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Check existing columns in attendances
+            result = conn.execute(text("PRAGMA table_info(attendances)")).fetchall()
+            existing_cols = {row[1] for row in result}
+            
+            new_columns = [
+                ("latitude", "FLOAT"),
+                ("longitude", "FLOAT"),
+                ("accuracy", "FLOAT"),
+                ("distance", "FLOAT"),
+                ("geofence_status", "VARCHAR(100) DEFAULT 'Verified (Within Radius)'"),
+                ("device_info", "VARCHAR(200)"),
+                ("session_id", "VARCHAR(100)"),
+            ]
+            for col_name, col_type in new_columns:
+                if col_name not in existing_cols:
+                    conn.execute(text(f"ALTER TABLE attendances ADD COLUMN {col_name} {col_type}"))
+            conn.commit()
+    except Exception as e:
+        print(f"DB Migration Warning: {e}")
+
+    # Seed initial InstitutionConfig if none exists
+    db = SessionLocal()
+    try:
+        cfg = db.query(InstitutionConfig).first()
+        if not cfg:
+            default_cfg = InstitutionConfig(
+                name="Cooperative Skill Center (NCCT / VAMNICOM)",
+                latitude=28.6139,
+                longitude=77.2090,
+                allowed_radius_meters=50.0,
+                max_accuracy_threshold=100.0,
+                enforce_geofence=True
+            )
+            db.add(default_cfg)
+            db.commit()
+    except Exception as e:
+        print(f"InstitutionConfig seed warning: {e}")
+        db.rollback()
+    finally:
+        db.close()

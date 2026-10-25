@@ -20,9 +20,20 @@ import {
   FileSpreadsheet,
   Download,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  MapPin,
+  Navigation,
+  Crosshair
 } from 'lucide-react';
-import { fetchAttendanceLogs, updateAttendanceApi, manualAttendanceApi, deleteAttendanceApi, fetchStudents } from '../api';
+import { 
+  fetchAttendanceLogs, 
+  updateAttendanceApi, 
+  manualAttendanceApi, 
+  deleteAttendanceApi, 
+  fetchStudents,
+  fetchInstitutionConfig,
+  updateInstitutionConfig
+} from '../api';
 import { AttendanceRecord, UserProfile } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -58,6 +69,20 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
   const [isSubmittingManual, setIsSubmittingManual] = useState<boolean>(false);
   const [alertMsg, setAlertMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Modal: Delete Confirmation
+  const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<AttendanceRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Modal: Campus Geofence Configuration
+  const [showGeofenceModal, setShowGeofenceModal] = useState<boolean>(false);
+  const [geofenceName, setGeofenceName] = useState<string>('Cooperative Skill Center (NCCT / VAMNICOM)');
+  const [geofenceLat, setGeofenceLat] = useState<number>(28.6139);
+  const [geofenceLon, setGeofenceLon] = useState<number>(77.2090);
+  const [geofenceRadius, setGeofenceRadius] = useState<number>(50.0);
+  const [geofenceAccuracy, setGeofenceAccuracy] = useState<number>(100.0);
+  const [geofenceEnforce, setGeofenceEnforce] = useState<boolean>(true);
+  const [isSavingGeofence, setIsSavingGeofence] = useState<boolean>(false);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -65,19 +90,54 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [fetchedLogs, fetchedStudents] = await Promise.all([
+      const [fetchedLogs, fetchedStudents, fetchedConfig] = await Promise.all([
         fetchAttendanceLogs(),
-        fetchStudents()
+        fetchStudents(),
+        fetchInstitutionConfig().catch(() => null)
       ]);
       setLogs(fetchedLogs || []);
       setStudentsList(fetchedStudents || []);
       if (fetchedStudents && fetchedStudents.length > 0) {
         setManualStudentId(fetchedStudents[0].student_id || String(fetchedStudents[0].id));
       }
+      if (fetchedConfig && fetchedConfig.success && fetchedConfig.config) {
+        setGeofenceName(fetchedConfig.config.name || 'Cooperative Skill Center (NCCT / VAMNICOM)');
+        setGeofenceLat(fetchedConfig.config.latitude ?? 28.6139);
+        setGeofenceLon(fetchedConfig.config.longitude ?? 77.2090);
+        setGeofenceRadius(fetchedConfig.config.allowed_radius_meters ?? 50.0);
+        setGeofenceAccuracy(fetchedConfig.config.max_accuracy_threshold ?? 100.0);
+        setGeofenceEnforce(fetchedConfig.config.enforce_geofence ?? true);
+      }
     } catch (e) {
       console.error('Error loading attendance logs', e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveGeofence = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingGeofence(true);
+    try {
+      const res = await updateInstitutionConfig({
+        name: geofenceName,
+        latitude: Number(geofenceLat),
+        longitude: Number(geofenceLon),
+        allowed_radius_meters: Number(geofenceRadius),
+        max_accuracy_threshold: Number(geofenceAccuracy),
+        enforce_geofence: Boolean(geofenceEnforce)
+      }, currentUser.role);
+
+      if (res && res.success) {
+        setAlertMsg({ type: 'success', text: 'Campus geofence perimeter updated successfully!' });
+        setShowGeofenceModal(false);
+      } else {
+        setAlertMsg({ type: 'error', text: res?.message || 'Failed to update geofence configuration.' });
+      }
+    } catch (err: any) {
+      setAlertMsg({ type: 'error', text: err.message || 'Error updating geofence parameters.' });
+    } finally {
+      setIsSavingGeofence(false);
     }
   };
 
@@ -114,18 +174,28 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
     }
   };
 
-  const handleDeleteRecord = async (id: number, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete attendance record #${id} for ${name}?`)) return;
+  const handleDeleteRecord = (record: AttendanceRecord) => {
+    setDeleteConfirmRecord(record);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmRecord) return;
+    setIsDeleting(true);
     try {
-      const res = await deleteAttendanceApi(id);
+      const res = await deleteAttendanceApi(deleteConfirmRecord.id);
       if (res && res.success !== false) {
-        setAlertMsg({ type: 'success', text: `Attendance record #${id} deleted.` });
+        setAlertMsg({ type: 'success', text: `Attendance record #${deleteConfirmRecord.id} for ${deleteConfirmRecord.student_name} deleted.` });
+        setDeleteConfirmRecord(null);
         await loadData();
       } else {
-        alert(res?.message || 'Failed to delete record.');
+        setAlertMsg({ type: 'error', text: res?.message || 'Failed to delete record.' });
+        setDeleteConfirmRecord(null);
       }
     } catch (err: any) {
-      alert(err.message || 'Error deleting record.');
+      setAlertMsg({ type: 'error', text: err.message || 'Error deleting record.' });
+      setDeleteConfirmRecord(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -220,6 +290,14 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowGeofenceModal(true)}
+            className="gradient-btn gradient-btn-cyan"
+            style={{ padding: '10px 16px', fontSize: '0.85rem' }}
+          >
+            <MapPin size={16} /> Campus Geofence Perimeter
+          </button>
+
           <button
             onClick={() => setShowManualModal(true)}
             className="gradient-btn gradient-btn-success"
@@ -435,6 +513,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
                 <th style={{ padding: '14px 18px', color: '#94a3b8', fontWeight: 600 }}>Date & Time</th>
                 <th style={{ padding: '14px 18px', color: '#94a3b8', fontWeight: 600 }}>Verification Method</th>
                 <th style={{ padding: '14px 18px', color: '#94a3b8', fontWeight: 600 }}>Confidence / Liveness</th>
+                <th style={{ padding: '14px 18px', color: '#94a3b8', fontWeight: 600 }}>GPS Telemetry & Geofence</th>
                 <th style={{ padding: '14px 18px', color: '#94a3b8', fontWeight: 600 }}>Status</th>
                 <th style={{ padding: '14px 18px', color: '#94a3b8', fontWeight: 600, textAlign: 'right' }}>Admin Actions</th>
               </tr>
@@ -442,7 +521,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
             <tbody>
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
                     No attendance records match your filter criteria.
                   </td>
                 </tr>
@@ -532,6 +611,37 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
                         </div>
                       </td>
 
+                      {/* GPS Telemetry & Geofence (Requirement 3, 4, 7, 11) */}
+                      <td style={{ padding: '14px 18px' }}>
+                        {item.distance !== undefined && item.distance !== null ? (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <MapPin size={13} color="#06b6d4" />
+                              <span style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem' }}>
+                                {item.distance}m away
+                              </span>
+                            </div>
+                            <div style={{ 
+                              fontSize: '0.72rem', 
+                              color: (item.geofence_status || '').toLowerCase().includes('verified') ? '#34d399' : '#f87171',
+                              marginTop: '2px',
+                              fontWeight: 500
+                            }}>
+                              {item.geofence_status || 'Verified (Within Radius)'}
+                            </div>
+                            {item.latitude && (
+                              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                {item.latitude.toFixed(4)}°, {item.longitude?.toFixed(4)}°
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {isManual ? 'Manual Override' : 'No GPS Data'}
+                          </span>
+                        )}
+                      </td>
+
                       {/* Status */}
                       <td style={{ padding: '14px 18px' }}>
                         <span style={{
@@ -588,7 +698,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
 
                           <button
                             type="button"
-                            onClick={() => handleDeleteRecord(item.id, item.student_name)}
+                            onClick={() => handleDeleteRecord(item)}
                             title="Delete Record"
                             style={{
                               padding: '6px 8px',
@@ -596,7 +706,16 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
                               backgroundColor: 'rgba(239, 68, 68, 0.1)',
                               border: '1px solid rgba(239, 68, 68, 0.2)',
                               color: '#f87171',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.25)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
                             }}
                           >
                             <Trash2 size={13} />
@@ -982,6 +1101,364 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({ cu
                   }}
                 >
                   Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Attendance Record Confirmation Modal */}
+      {deleteConfirmRecord && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.82)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 200,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '480px',
+            padding: '26px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            boxShadow: '0 20px 40px rgba(239, 68, 68, 0.15)'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ef4444',
+                flexShrink: 0
+              }}>
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', color: '#f8fafc', margin: 0 }}>Delete Attendance Record</h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  This action cannot be undone
+                </p>
+              </div>
+            </div>
+
+            {/* Record Preview */}
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              marginBottom: '16px',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '8px'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '2px' }}>Record ID</div>
+                <div style={{ color: '#38bdf8', fontWeight: 700 }}>#{deleteConfirmRecord.id}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '2px' }}>Student</div>
+                <div style={{ color: '#f8fafc', fontWeight: 600 }}>{deleteConfirmRecord.student_name}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '2px' }}>Date</div>
+                <div style={{ color: '#cbd5e1' }}>{deleteConfirmRecord.date}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '2px' }}>Status</div>
+                <div style={{ color: '#34d399' }}>{deleteConfirmRecord.status || 'Present'}</div>
+              </div>
+            </div>
+
+            <p style={{
+              fontSize: '0.82rem',
+              color: '#fca5a5',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              marginBottom: '20px',
+              lineHeight: 1.5
+            }}>
+              ⚠️ <b>Warning:</b> Deleting this record will permanently remove it from the attendance database. This will also affect the student's attendance percentage calculation.
+            </p>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmRecord(null)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#f8fafc',
+                  padding: '9px 20px',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  opacity: isDeleting ? 0.6 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: isDeleting ? 'rgba(239, 68, 68, 0.5)' : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '9px 20px',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  boxShadow: isDeleting ? 'none' : '0 4px 14px rgba(239, 68, 68, 0.4)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Confirm Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Campus Geofence Perimeter Modal */}
+      {showGeofenceModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '520px',
+            padding: '28px',
+            border: '1px solid rgba(6, 182, 212, 0.3)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <MapPin size={22} color="#06b6d4" />
+                <h3 style={{ fontSize: '1.25rem', color: '#f8fafc', margin: 0 }}>Configure Campus Geofence</h3>
+              </div>
+              <button 
+                onClick={() => setShowGeofenceModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGeofence} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Institution / Center Name:
+                </label>
+                <input
+                  type="text"
+                  value={geofenceName}
+                  onChange={(e) => setGeofenceName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: '#0f172a',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    color: '#f8fafc',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Campus Latitude:
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={geofenceLat}
+                    onChange={(e) => setGeofenceLat(parseFloat(e.target.value))}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#38bdf8',
+                      fontSize: '0.85rem',
+                      fontWeight: 600
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Campus Longitude:
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={geofenceLon}
+                    onChange={(e) => setGeofenceLon(parseFloat(e.target.value))}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#38bdf8',
+                      fontSize: '0.85rem',
+                      fontWeight: 600
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Allowed Radius (Meters):
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={geofenceRadius}
+                    onChange={(e) => setGeofenceRadius(parseFloat(e.target.value))}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#f8fafc',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Default: 50.0 meters</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Max GPS Error (± Meters):
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="5"
+                    value={geofenceAccuracy}
+                    onChange={(e) => setGeofenceAccuracy(parseFloat(e.target.value))}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#f8fafc',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Max accuracy: ±100m</span>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255,255,255,0.03)',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <input
+                  type="checkbox"
+                  id="enforceGeofenceCheck"
+                  checked={geofenceEnforce}
+                  onChange={(e) => setGeofenceEnforce(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <label htmlFor="enforceGeofenceCheck" style={{ fontSize: '0.85rem', color: '#f8fafc', cursor: 'pointer' }}>
+                  <b>Enforce Real GPS Geofencing Validation</b>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    Reject attendance when students are outside the {geofenceRadius}m radius or GPS accuracy is poor.
+                  </div>
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowGeofenceModal(false)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#f8fafc',
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingGeofence}
+                  className="gradient-btn"
+                  style={{ padding: '9px 20px', fontSize: '0.85rem' }}
+                >
+                  {isSavingGeofence ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} /> Update Geofence Perimeter
+                    </>
+                  )}
                 </button>
               </div>
             </form>

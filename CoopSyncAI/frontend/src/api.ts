@@ -56,9 +56,20 @@ export async function fetchAdmins() {
   }
 }
 
-export async function recognizeFaceImage(base64Image: string, studentId?: string) {
-  const body: Record<string, string> = { image_base64: base64Image };
+export async function recognizeFaceImage(
+  base64Image: string, 
+  studentId?: string,
+  gpsData?: { latitude?: number; longitude?: number; accuracy?: number; session_id?: string; device_info?: string }
+) {
+  const body: Record<string, any> = { image_base64: base64Image };
   if (studentId) body.student_id = studentId;
+  if (gpsData) {
+    if (gpsData.latitude !== undefined) body.latitude = gpsData.latitude;
+    if (gpsData.longitude !== undefined) body.longitude = gpsData.longitude;
+    if (gpsData.accuracy !== undefined) body.accuracy = gpsData.accuracy;
+    if (gpsData.session_id !== undefined) body.session_id = gpsData.session_id;
+    if (gpsData.device_info !== undefined) body.device_info = gpsData.device_info;
+  }
   try {
     const res = await fetch(`${API_BASE}/attendance/face-recognize`, {
       method: 'POST',
@@ -93,11 +104,45 @@ export async function generateQRAttendance() {
   return await res.json();
 }
 
-export async function verifyQRAttendance(qrText: string, studentId: string) {
+export async function verifyQRAttendance(
+  qrText: string, 
+  studentId: string,
+  gpsData?: {
+    latitude?: number;
+    longitude?: number;
+    accuracy?: number;
+    timestamp?: number;
+    session_id?: string;
+    device_info?: string;
+  }
+) {
+  const payload: any = { qr_text: qrText, student_id: studentId };
+  if (gpsData) {
+    if (gpsData.latitude !== undefined) payload.latitude = gpsData.latitude;
+    if (gpsData.longitude !== undefined) payload.longitude = gpsData.longitude;
+    if (gpsData.accuracy !== undefined) payload.accuracy = gpsData.accuracy;
+    if (gpsData.timestamp !== undefined) payload.timestamp = gpsData.timestamp;
+    if (gpsData.session_id !== undefined) payload.session_id = gpsData.session_id;
+    if (gpsData.device_info !== undefined) payload.device_info = gpsData.device_info;
+  }
   const res = await fetch(`${API_BASE}/attendance/qr/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ qr_text: qrText, student_id: studentId }),
+    body: JSON.stringify(payload),
+  });
+  return await res.json();
+}
+
+export async function fetchInstitutionConfig() {
+  const res = await fetch(`${API_BASE}/institution/config`);
+  return await res.json();
+}
+
+export async function updateInstitutionConfig(configData: any, requesterRole: string = 'admin') {
+  const res = await fetch(`${API_BASE}/institution/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...configData, requester_role: requesterRole }),
   });
   return await res.json();
 }
@@ -302,11 +347,16 @@ export async function updateStudentApi(studentId: string, studentData: any) {
   return await res.json();
 }
 
+
 export async function deleteStudentApi(studentId: string) {
-  const res = await fetch(`${API_BASE}/students/${studentId}`, {
-    method: 'DELETE',
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/students/${studentId}`, {
+      method: 'DELETE',
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
 }
 
 export async function clearAttendanceLogsApi() {

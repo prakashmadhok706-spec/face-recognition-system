@@ -37,6 +37,13 @@ export interface AttendanceRecord {
   confidence: number;
   liveness_verified: boolean;
   status: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy?: number | null;
+  distance?: number | null;
+  geofence_status?: string | null;
+  device_info?: string | null;
+  session_id?: string | null;
 }
 
 export interface CourseItem {
