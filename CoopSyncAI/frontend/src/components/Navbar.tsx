@@ -36,8 +36,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   currentUser,
-  setCurrentUser,
-  allUsers,
+  setCurrentUser: _setCurrentUser,
+  allUsers: _allUsers,
   isOnline,
   offlineCount,
   onSyncOffline,
@@ -73,9 +73,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems = isStudentPortal ? studentNavItems : adminNavItems;
 
-  const displayedUsers = allUsers.filter(u => 
-    isStudentPortal ? u.role === 'student' : u.role !== 'student'
-  );
 
   return (
     <header style={{
@@ -206,13 +203,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Current User Switcher */}
+          {/* Locked User Badge (no switcher – identity fixed to logged-in user) */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
             background: 'rgba(255, 255, 255, 0.05)',
-            padding: '4px 12px 4px 6px',
+            padding: '4px 14px 4px 6px',
             borderRadius: '30px',
             border: '1px solid rgba(255, 255, 255, 0.08)'
           }}>
@@ -227,32 +224,35 @@ export const Navbar: React.FC<NavbarProps> = ({
                 border: '2px solid #6366f1'
               }}
             />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <select
-                value={currentUser.id}
-                onChange={(e) => {
-                  const selected = displayedUsers.find(u => u.id === Number(e.target.value));
-                  if (selected) setCurrentUser(selected);
-                }}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#f8fafc',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  outline: 'none'
-                }}
-              >
-                {displayedUsers.map((u) => (
-                  <option key={u.id} value={u.id} style={{ background: '#0f1527', color: '#f8fafc' }}>
-                    {u.name} ({u.role.toUpperCase()})
-                  </option>
-                ))}
-              </select>
-              <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>
-                ID: {currentUser.student_id || 'STAFF-ADMIN'}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                color: '#f8fafc',
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap'
+              }}>
+                {currentUser.name}
               </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  background: isStudentPortal
+                    ? 'rgba(6, 182, 212, 0.18)'
+                    : 'rgba(16, 185, 129, 0.18)',
+                  color: isStudentPortal ? '#38bdf8' : '#34d399',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  {currentUser.role}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                  ID: {currentUser.student_id || 'STAFF-ADMIN'}
+                </span>
+              </div>
             </div>
           </div>
 
