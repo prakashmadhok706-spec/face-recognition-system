@@ -21,13 +21,13 @@
 | **Verified Digital Certificates (PDF + QR)** | ✅ Completed | 100% |
 | **AI Employment & Placement Portal** | ✅ Completed | 100% |
 | **Interactive Analytics Dashboard & KPI Metrics** | ✅ Completed | 100% |
-| **AI Chatbot & Semantic Advisor (Dual-Engine LLM)** | ✅ Completed | 100% |
+| **AI Chatbot & Semantic Advisor** | ✅ Completed | 100% |
 | **Offline Attendance Synchronization** | ✅ Completed | 100% |
 | **In-Browser Dataset Enrollment & Web Retraining** | ✅ Completed | 100% |
 | **Multi-Role RBAC (NCCT, Admin, Trainer, Student, Recruiter)** | ✅ Completed | 100% |
 | **Production Containerization (Docker Compose)** | ✅ Completed | 100% |
-| **External Generative LLM Switch (Gemini / Groq / OpenRouter)** | ✅ Completed | 100% |
 | **Live Multi-Cloud Deployment (Render + Vercel)** | 🟡 Ready for Deployment | 90% |
+| **External Generative LLM Switch (OpenAI/Gemini API)** | 🔵 Future Enhancement | Planned |
 | **Automated WhatsApp / SMS Attendance Alerts** | 🔵 Future Enhancement | Planned |
 
 ---
@@ -97,21 +97,10 @@
 - [x] **In-Demand Skills Matrix:** Visual progress bars highlighting market requirements.
 - [x] **CSV Report Export:** 1-click export of attendance data to CSV.
 
-### 9. 🤖 CoopSync AI Advisor & Dual-Engine Generative Chatbot
-- [x] **Dual-Engine Architecture (Cloud LLM + Local RAG):** Intelligent hybrid system that seamlessly calls Cloud Generative AI APIs when an API key is connected, and falls back automatically to local semantic RAG and knowledge bases when offline.
-- [x] **Supported Free AI Providers:**
-  - **Google Gemini:** Supports `gemini-1.5-flash`, `gemini-2.0-flash`, and `gemini-1.5-pro` via Google AI Studio keys (`AIzaSy...`).
-  - **Groq Cloud:** Ultra-fast inference with `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` via Groq keys (`gsk_...`).
-  - **OpenRouter:** Access to hundreds of open-source models (`openrouter/free`, `mistralai/...`).
-- [x] **Automatic Model Fallback Chains:** If a specific model encounters quota limits or errors, the engine automatically attempts the next model in the fallback chain before falling back to local search.
-- [x] **In-Browser ⚙️ AI Settings Modal:** Built-in slide-over settings drawer allowing users and administrators to select their AI provider, input their API key, test connectivity, and save settings instantly without restarting servers.
-- [x] **Dynamic Configuration Endpoints:** Backend REST endpoints `GET /api/ai/config` and `POST /api/ai/config` with runtime memory persistence and `.env` synchronization.
-- [x] **Wikipedia Live Educational Fallback (`fetch_educational_summary`):** Integrated Wikipedia REST API with a 4-second timeout to answer broad scientific, academic, and general knowledge questions (*"What is photosynthesis?"*, *"Theory of relativity"*, *"What is machine learning?"*) without requiring an API key.
-- [x] **Built-In Academic Knowledge Bank (`BUILTIN_KNOWLEDGE_BANK`):** Pre-loaded high-accuracy answers for core subjects (photosynthesis, Python, OpenCV, cooperatives, Haversine formula, ML).
-- [x] **Rich Markdown Rendering:** Custom in-chat Markdown parser supporting bold, italic, code blocks, bullet points, numbered lists, and hyperlinks.
-- [x] **Model Attribution Badge:** Displays the exact model or knowledge base that answered each query (e.g., `gemini-1.5-flash`, `llama-3.3-70b-versatile`, `Live Wikipedia`, or `CoopSync Academic Knowledge Bank`).
-- [x] **Auto-Scroll & Typing Animations:** Real-time animated typing indicator (3-dot bounce) and smooth auto-scroll to the latest response.
-- [x] **Context-Aware ERP Integration:** Injects live student attendance, enrolled courses, skills profile, and open cooperative job listings into system prompts.
+### 9. 🤖 CoopSync AI Advisor (Chatbot)
+- [x] **Context-Aware Semantic Parser:** Intelligent assistant answering questions using live ERP database records.
+- [x] **Instant Query Chips:** Quick-action buttons for common queries (*"How many attendance days do I have?"*, *"Recommend jobs for my profile"*).
+- [x] **Markdown Formatting:** Formatted chat replies with bullet points and bold emphasis.
 
 ### 10. ⚡ Offline Attendance Synchronization
 - [x] **Local Storage Queue:** Automatically stores attendance check-ins when network connectivity drops.
@@ -151,7 +140,11 @@
   - **Backend + Database:** Render / Railway / AWS EC2 (FastAPI + PostgreSQL).
   - **Frontend:** Vercel / Netlify (React Vite).
 
-### 2. Automated SMS / WhatsApp Attendance Alerts
+### 2. External LLM API Key Integration (OpenAI / Gemini)
+- **Current State:** AI Chatbot runs on an internal rule-based semantic parser querying live ERP database records.
+- **Next Step:** Add an optional `.env` setting (`OPENAI_API_KEY` or `GEMINI_API_KEY`) to allow switching between internal parser and generative LLM streaming.
+
+### 3. Automated SMS / WhatsApp Attendance Alerts
 - **Current State:** Attendance is logged in the database and visible immediately on student & trainer dashboards.
 - **Next Step:** Integrate Twilio or Fast2SMS API to send automated WhatsApp/SMS alerts to parents or cooperative guardians when attendance is marked or if a student is absent.
 
@@ -161,21 +154,21 @@
 
 | Module | Primary Source File |
 | :--- | :--- |
-| **FastAPI Backend Server** | [`CoopSyncAI/backend/main.py`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/backend/main.py) |
-| **Face Recognition Engine** | [`CoopSyncAI/backend/face_engine.py`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/backend/face_engine.py) |
-| **Dynamic QR Engine** | [`CoopSyncAI/backend/qr_engine.py`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/backend/qr_engine.py) |
-| **PDF Certificate Generator** | [`CoopSyncAI/backend/certificate_engine.py`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/backend/certificate_engine.py) |
-| **AI Advisor Engine** | [`CoopSyncAI/backend/ai_engine.py`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/backend/ai_engine.py) |
-| **Database Models** | [`CoopSyncAI/backend/database.py`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/backend/database.py) |
-| **Main React Application** | [`CoopSyncAI/frontend/src/App.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/App.tsx) |
-| **Student ERP UI** | [`CoopSyncAI/frontend/src/components/StudentERPView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/StudentERPView.tsx) |
-| **Web Face Enrollment Engine** | [`CoopSyncAI/frontend/src/components/WebFaceEnrollmentModal.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/WebFaceEnrollmentModal.tsx) |
-| **Courses & YouTube LMS UI** | [`CoopSyncAI/frontend/src/components/CoursesView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/CoursesView.tsx) |
-| **Face Biometrics Scanner UI** | [`CoopSyncAI/frontend/src/components/FaceAttendanceView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/FaceAttendanceView.tsx) |
-| **QR Attendance UI** | [`CoopSyncAI/frontend/src/components/QRAttendanceView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/QRAttendanceView.tsx) |
-| **Analytics Dashboard UI** | [`CoopSyncAI/frontend/src/components/AnalyticsView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/AnalyticsView.tsx) |
-| **National Programmes UI** | [`CoopSyncAI/frontend/src/components/ProgrammesView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/ProgrammesView.tsx) |
-| **Certificates UI** | [`CoopSyncAI/frontend/src/components/CertificatesView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/CertificatesView.tsx) |
-| **Employment Portal UI** | [`CoopSyncAI/frontend/src/components/EmploymentView.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/EmploymentView.tsx) |
-| **AI Chatbot UI** | [`CoopSyncAI/frontend/src/components/AIChatModal.tsx`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/CoopSyncAI/frontend/src/components/AIChatModal.tsx) |
-| **1-Click Windows Launcher** | [`start_coopsync.bat`](file:///c:/Users/PRAKASH/OneDrive/Desktop/face%20recognition%20system/start_coopsync.bat) |
+| **FastAPI Backend Server** | [`CoopSyncAI/backend/main.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/main.py) |
+| **Face Recognition Engine** | [`CoopSyncAI/backend/face_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/face_engine.py) |
+| **Dynamic QR Engine** | [`CoopSyncAI/backend/qr_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/qr_engine.py) |
+| **PDF Certificate Generator** | [`CoopSyncAI/backend/certificate_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/certificate_engine.py) |
+| **AI Advisor Engine** | [`CoopSyncAI/backend/ai_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/ai_engine.py) |
+| **Database Models** | [`CoopSyncAI/backend/database.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/database.py) |
+| **Main React Application** | [`CoopSyncAI/frontend/src/App.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/App.tsx) |
+| **Student ERP UI** | [`CoopSyncAI/frontend/src/components/StudentERPView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/StudentERPView.tsx) |
+| **Web Face Enrollment Engine** | [`CoopSyncAI/frontend/src/components/WebFaceEnrollmentModal.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/WebFaceEnrollmentModal.tsx) |
+| **Courses & YouTube LMS UI** | [`CoopSyncAI/frontend/src/components/CoursesView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/CoursesView.tsx) |
+| **Face Biometrics Scanner UI** | [`CoopSyncAI/frontend/src/components/FaceAttendanceView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/FaceAttendanceView.tsx) |
+| **QR Attendance UI** | [`CoopSyncAI/frontend/src/components/QRAttendanceView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/QRAttendanceView.tsx) |
+| **Analytics Dashboard UI** | [`CoopSyncAI/frontend/src/components/AnalyticsView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/AnalyticsView.tsx) |
+| **National Programmes UI** | [`CoopSyncAI/frontend/src/components/ProgrammesView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/ProgrammesView.tsx) |
+| **Certificates UI** | [`CoopSyncAI/frontend/src/components/CertificatesView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/CertificatesView.tsx) |
+| **Employment Portal UI** | [`CoopSyncAI/frontend/src/components/EmploymentView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/EmploymentView.tsx) |
+| **AI Chatbot UI** | [`CoopSyncAI/frontend/src/components/AIChatModal.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/AIChatModal.tsx) |
+| **1-Click Windows Launcher** | [`start_coopsync.bat`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/start_coopsync.bat) |

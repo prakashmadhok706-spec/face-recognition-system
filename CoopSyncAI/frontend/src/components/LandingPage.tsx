@@ -16,7 +16,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { loginUserApi } from '../api';
+import { loginUserApi, registerUserApi } from '../api';
 
 interface LandingPageProps {
   allUsers: UserProfile[];
@@ -32,10 +32,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onLoginSuccess,
 }) => {
   const [selectedPortal, setSelectedPortal] = useState<PortalType | null>(null);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Sign-up specific fields
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirm, setSignupConfirm] = useState('');
+  const [signupStudentId, setSignupStudentId] = useState('');
+  const [signupRole, setSignupRole] = useState<'student' | 'admin' | 'trainer'>('student');
 
   // Filter available accounts by portal for quick demo selection
   const adminUsers = allUsers.filter(u => 
@@ -51,33 +60,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const handleOpenLogin = (portal: PortalType) => {
     setSelectedPortal(portal);
+    setAuthMode('signin');
     setErrorMessage(null);
-    if (portal === 'admin') {
-      const defaultAdmin = adminUsers.find(u => u.student_id === 'ADMIN001') || adminUsers[0];
-      setIdentifier(defaultAdmin ? (defaultAdmin.email || defaultAdmin.student_id) : 'admin@coopsync.edu');
-      setPassword('admin123');
-    } else {
-      const defaultStudent = studentUsers[0];
-      setIdentifier(defaultStudent ? (defaultStudent.student_id || defaultStudent.email) : '5025088');
-      setPassword('pass123');
-    }
+    setSuccessMessage(null);
+    setIdentifier('');
+    setPassword('');
   };
 
   const handleCloseLogin = () => {
     setSelectedPortal(null);
     setErrorMessage(null);
-  };
-
-  const handleSelectPredefinedUser = (user: UserProfile) => {
-    setIdentifier(user.email || user.student_id);
-    setPassword(user.role === 'student' ? 'pass123' : 'admin123');
-    setErrorMessage(null);
+    setSuccessMessage(null);
+    setAuthMode('signin');
+    setIdentifier('');
+    setPassword('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) {
-      setErrorMessage('Please enter your email, student ID, or staff ID.');
+      setErrorMessage(selectedPortal === 'admin' ? 'Please enter your official email or staff ID.' : 'Please enter your Student ID or email.');
       return;
     }
 
@@ -85,11 +87,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     setErrorMessage(null);
 
     try {
-      // 1. Attempt API authentication against backend
-      const res = await loginUserApi(identifier.trim(), password.trim() || 'password');
+      const res = await loginUserApi(identifier.trim(), password.trim());
       
       if (res && res.user) {
-        // Backend returned verified user
         const matchedUser: UserProfile = {
           id: res.user.id,
           student_id: res.user.student_id,
@@ -104,44 +104,84 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           avatar: res.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
         };
 
+        // Portal restriction check
+        if (selectedPortal === 'student' && matchedUser.role !== 'student') {
+          setErrorMessage('This account is registered with administrative/faculty role. Please sign in via Admin Portal.');
+          return;
+        }
+        if (selectedPortal === 'admin' && matchedUser.role === 'student') {
+          setErrorMessage('Students cannot access the Admin Portal. Please use the Student Portal.');
+          return;
+        }
+
         const targetTab = selectedPortal === 'admin' ? 'dashboard' : 'courses';
         onLoginSuccess(matchedUser, targetTab);
         return;
-      }
-
-      // 2. Fallback matching from local allUsers (supports offline mode and seeded accounts)
-      const input = identifier.trim().toLowerCase();
-      let matched = allUsers.find(u => 
-        u.email.toLowerCase() === input || 
-        u.student_id.toLowerCase() === input ||
-        u.roll_number.toLowerCase() === input ||
-        u.name.toLowerCase().includes(input)
-      );
-
-      // If portal constraint is applied, pick best role match
-      if (!matched) {
-        if (selectedPortal === 'admin') {
-          matched = adminUsers[0];
-        } else {
-          matched = studentUsers[0];
-        }
-      }
-
-      if (matched) {
-        const targetTab = selectedPortal === 'admin' ? 'dashboard' : 'courses';
-        onLoginSuccess(matched, targetTab);
       } else {
-        setErrorMessage('User credentials could not be verified. Please check and retry.');
+        setErrorMessage(
+          res?.detail || 
+          (selectedPortal === 'student' 
+            ? 'Invalid student ID or password. Student accounts must be registered by an administrator.' 
+            : 'Invalid credentials. Please verify your official email/staff ID and password.')
+        );
       }
-    } catch (err: any) {
-      // Graceful offline fallback
-      const fallbackList = selectedPortal === 'admin' ? adminUsers : studentUsers;
-      if (fallbackList.length > 0) {
-        const targetTab = selectedPortal === 'admin' ? 'dashboard' : 'courses';
-        onLoginSuccess(fallbackList[0], targetTab);
+    } catch {
+      setErrorMessage('Unable to connect to the authentication server. Please ensure the backend is running.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signupName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
+      setErrorMessage('Please fill in all required fields.');
+      return;
+    }
+    if (signupPassword !== signupConfirm) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+
+    // Only admin or trainer allowed for registration
+    const role: 'admin' | 'trainer' = signupRole === 'trainer' ? 'trainer' : 'admin';
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await registerUserApi({
+        name: signupName.trim(),
+        email: signupEmail.trim().toLowerCase(),
+        password: signupPassword,
+        role: role,
+        student_id: signupStudentId.trim() || undefined,
+      });
+
+      if (res && res.success && res.user) {
+        const newUser: UserProfile = {
+          id: res.user.id,
+          student_id: res.user.student_id,
+          roll_number: '',
+          name: res.user.name,
+          email: res.user.email,
+          role: res.user.role,
+          department: res.user.department || 'Cooperative Administration',
+          semester: res.user.semester || '',
+          degree: res.user.degree || '',
+          skills: res.user.skills || '',
+          avatar: res.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+        };
+        onLoginSuccess(newUser, 'dashboard');
       } else {
-        setErrorMessage('Unable to connect to authentication server.');
+        setErrorMessage(res?.detail || res?.message || 'Registration failed. Please try again.');
       }
+    } catch {
+      setErrorMessage('Unable to connect to server. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -717,56 +757,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             }}
           >
             {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '20px'
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '12px',
+                  width: '44px', height: '44px', borderRadius: '12px',
                   backgroundColor: selectedPortal === 'admin' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.15)',
                   border: `1px solid ${selectedPortal === 'admin' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: selectedPortal === 'admin' ? '#10b981' : '#38bdf8'
                 }}>
                   {selectedPortal === 'admin' ? <ShieldCheck size={24} /> : <GraduationCap size={24} />}
                 </div>
-
                 <div>
-                  <h3 style={{
-                    fontSize: '1.25rem',
-                    fontWeight: 700,
-                    color: '#ffffff',
-                    letterSpacing: '-0.01em'
-                  }}>
-                    {selectedPortal === 'admin' ? 'Admin Authentication' : 'Student Authentication'}
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em' }}>
+                    {selectedPortal === 'admin' ? 'Admin Portal' : 'Student Portal'}
                   </h3>
                   <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
                     {selectedPortal === 'admin' ? 'National & Institutional Authorities' : 'Enrolled Candidates & Trainees'}
                   </span>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={handleCloseLogin}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
+              <button type="button" onClick={handleCloseLogin}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = '#ffffff'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; }}
               >
@@ -774,183 +786,193 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </div>
 
-            {/* Quick Demo Profile Switcher (Ideal for evaluators & judges) */}
-            <div style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              borderRadius: '10px',
-              padding: '10px 12px',
-              marginBottom: '20px'
-            }}>
-              <span style={{
-                fontSize: '0.7rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                color: '#94a3b8',
-                fontWeight: 600,
-                display: 'block',
-                marginBottom: '8px'
-              }}>
-                Demo Fast Access (Select Role Profile):
-              </span>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {(selectedPortal === 'admin' ? adminUsers : studentUsers).map((u) => {
-                  const isSelected = identifier === (u.email || u.student_id);
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => handleSelectPredefinedUser(u)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: isSelected ? 600 : 500,
-                        backgroundColor: isSelected 
-                          ? (selectedPortal === 'admin' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(56, 189, 248, 0.25)')
-                          : 'rgba(255, 255, 255, 0.05)',
-                        color: isSelected ? '#ffffff' : '#94a3b8',
-                        border: isSelected 
-                          ? `1px solid ${selectedPortal === 'admin' ? '#10b981' : '#38bdf8'}` 
-                          : '1px solid rgba(255, 255, 255, 0.08)',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      {u.name.split(' ')[0]} ({u.role === 'ncct_admin' ? 'NCCT' : u.role === 'institution_admin' ? 'Director' : u.role === 'student' ? u.student_id : u.role})
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Error Message */}
-            {errorMessage && (
-              <div style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#fca5a5',
-                fontSize: '0.82rem',
-                marginBottom: '16px'
-              }}>
-                {errorMessage}
+            {/* Portal Mode Tabs — Only show for Admin Portal */}
+            {selectedPortal === 'admin' && (
+              <div style={{ display: 'flex', gap: '4px', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '4px', marginBottom: '20px' }}>
+                {(['signin', 'signup'] as const).map((mode) => (
+                  <button key={mode} type="button"
+                    onClick={() => { setAuthMode(mode); setErrorMessage(null); setSuccessMessage(null); }}
+                    style={{
+                      flex: 1, padding: '8px', borderRadius: '7px', border: 'none', cursor: 'pointer',
+                      fontSize: '0.85rem', fontWeight: 600, transition: 'all 0.2s ease',
+                      backgroundColor: authMode === mode ? '#10b981' : 'transparent',
+                      color: authMode === mode ? '#ffffff' : '#94a3b8',
+                    }}
+                  >
+                    {mode === 'signin' ? '🔑 Sign In' : '✨ Sign Up'}
+                  </button>
+                ))}
               </div>
             )}
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: '#cbd5e1',
-                  marginBottom: '6px'
-                }}>
-                  {selectedPortal === 'admin' ? 'Official Email / Staff ID' : 'Student ID / Enrolled Email'}
-                </label>
-                <div style={{
-                  position: 'relative',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}>
-                  <User size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px' }} />
-                  <input
-                    type="text"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder={selectedPortal === 'admin' ? 'e.g. admin@coopsync.edu or ADMIN001' : 'e.g. 5025088 or puneet@coopsync.edu'}
-                    style={{
-                      width: '100%',
-                      padding: '11px 12px 11px 38px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: '8px',
-                      color: '#ffffff',
-                      fontSize: '0.88rem',
-                      outline: 'none'
-                    }}
-                    required
-                  />
+            {/* Student Portal Info Notice */}
+            {selectedPortal === 'student' && (
+              <div style={{
+                backgroundColor: 'rgba(2, 132, 199, 0.08)',
+                border: '1px solid rgba(2, 132, 199, 0.25)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                marginBottom: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.8rem',
+                color: '#7dd3fc',
+                lineHeight: 1.4
+              }}>
+                <GraduationCap size={22} color="#38bdf8" style={{ flexShrink: 0 }} />
+                <div>
+                  <strong style={{ color: '#ffffff' }}>Authorized Student Sign In</strong>
+                  <div style={{ color: '#94a3b8', fontSize: '0.73rem', marginTop: '2px' }}>
+                    Student IDs are issued exclusively by Institutional Administrators. Self-registration is disabled.
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: '#cbd5e1',
-                  marginBottom: '6px'
-                }}>
-                  Password / PIN
-                </label>
-                <div style={{
-                  position: 'relative',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}>
-                  <Lock size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px' }} />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    style={{
-                      width: '100%',
-                      padding: '11px 12px 11px 38px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: '8px',
-                      color: '#ffffff',
-                      fontSize: '0.88rem',
-                      outline: 'none'
-                    }}
-                    required
-                  />
-                </div>
+            {/* Error / Success Messages */}
+            {errorMessage && (
+              <div style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: '0.82rem', marginBottom: '16px' }}>
+                {errorMessage}
               </div>
+            )}
+            {successMessage && (
+              <div style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7', fontSize: '0.82rem', marginBottom: '16px' }}>
+                {successMessage}
+              </div>
+            )}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                style={{
-                  width: '100%',
-                  padding: '13px',
-                  borderRadius: '8px',
-                  backgroundColor: selectedPortal === 'admin' ? '#10b981' : '#0284c7',
-                  color: '#ffffff',
-                  border: 'none',
-                  fontSize: '0.95rem',
-                  fontWeight: 600,
-                  fontFamily: 'var(--font-heading)',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  marginTop: '8px',
-                  transition: 'background-color 0.2s ease',
-                  opacity: isLoading ? 0.75 : 1
-                }}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Verifying Credentials...</span>
-                  </>
+            {/* ── SIGN IN FORM ── */}
+            {authMode === 'signin' && (
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
+                    {selectedPortal === 'admin' ? 'Official Email / Staff ID' : 'Student ID / Enrolled Email'}
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <User size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px' }} />
+                    <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder={selectedPortal === 'admin' ? 'e.g. admin@coopsync.edu or ADMIN001' : 'e.g. 5025088 or student@coopsync.edu'}
+                      style={{ width: '100%', padding: '11px 12px 11px 38px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>Password</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Lock size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px' }} />
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      style={{ width: '100%', padding: '11px 12px 11px 38px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                      required
+                    />
+                  </div>
+                </div>
+                <button type="submit" disabled={isLoading}
+                  style={{ width: '100%', padding: '13px', borderRadius: '8px', backgroundColor: selectedPortal === 'admin' ? '#10b981' : '#0284c7', color: '#ffffff', border: 'none', fontSize: '0.95rem', fontWeight: 600, cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '4px', transition: 'opacity 0.2s', opacity: isLoading ? 0.75 : 1 }}
+                >
+                  {isLoading ? <><Loader2 size={18} className="animate-spin" /><span>Verifying...</span></> : <><span>Sign In to {selectedPortal === 'admin' ? 'Admin' : 'Student'} Portal</span><ArrowRight size={17} /></>}
+                </button>
+                {selectedPortal === 'admin' ? (
+                  <p style={{ textAlign: 'center', fontSize: '0.78rem', color: '#64748b', margin: 0 }}>
+                    Need an administrator account?{' '}
+                    <button type="button" onClick={() => { setAuthMode('signup'); setErrorMessage(null); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', fontWeight: 600, fontSize: '0.78rem', padding: 0 }}>
+                      Register here
+                    </button>
+                  </p>
                 ) : (
-                  <>
-                    <span>Enter {selectedPortal === 'admin' ? 'Admin Portal' : 'Student Portal'}</span>
-                    <ArrowRight size={17} />
-                  </>
+                  <p style={{ textAlign: 'center', fontSize: '0.78rem', color: '#64748b', margin: '4px 0 0 0' }}>
+                    Not registered yet? Please contact your institution administrator to receive your Student ID.
+                  </p>
                 )}
-              </button>
-            </form>
+              </form>
+            )}
+
+            {/* ── SIGN UP FORM (Admin Portal Only) ── */}
+            {authMode === 'signup' && selectedPortal === 'admin' && (
+              <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Full Name */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>Full Name *</label>
+                  <input type="text" value={signupName} onChange={(e) => setSignupName(e.target.value)}
+                    placeholder="e.g. Dr. Priya Sharma"
+                    style={{ width: '100%', padding: '11px 14px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+                {/* Email */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>Official Email Address *</label>
+                  <input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)}
+                    placeholder="e.g. admin@coopsync.edu"
+                    style={{ width: '100%', padding: '11px 14px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+                {/* Role + Staff ID row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
+                      Administrative Role *
+                    </label>
+                    <select value={signupRole} onChange={(e) => setSignupRole(e.target.value as any)}
+                      style={{ width: '100%', padding: '11px 12px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="admin">Institutional Admin</option>
+                      <option value="trainer">Faculty / Trainer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
+                      Staff / Employee ID <span style={{ color: '#64748b' }}>(optional)</span>
+                    </label>
+                    <input type="text" value={signupStudentId} onChange={(e) => setSignupStudentId(e.target.value)}
+                      placeholder="e.g. ADM001"
+                      style={{ width: '100%', padding: '11px 12px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+                {/* Password */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>Password * <span style={{ color: '#64748b', fontWeight: 400 }}>(min. 6 characters)</span></label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Lock size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px' }} />
+                    <input type="password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)}
+                      placeholder="Create admin password"
+                      style={{ width: '100%', padding: '11px 12px 11px 38px', backgroundColor: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                      required
+                    />
+                  </div>
+                </div>
+                {/* Confirm Password */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>Confirm Password *</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Lock size={16} color={signupConfirm && signupConfirm !== signupPassword ? '#ef4444' : '#94a3b8'} style={{ position: 'absolute', left: '12px' }} />
+                    <input type="password" value={signupConfirm} onChange={(e) => setSignupConfirm(e.target.value)}
+                      placeholder="Re-enter password"
+                      style={{ width: '100%', padding: '11px 12px 11px 38px', backgroundColor: 'rgba(15,23,42,0.8)', border: `1px solid ${signupConfirm && signupConfirm !== signupPassword ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`, borderRadius: '8px', color: '#ffffff', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={isLoading}
+                  style={{ width: '100%', padding: '13px', borderRadius: '8px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', fontSize: '0.95rem', fontWeight: 600, cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '2px', transition: 'opacity 0.2s', opacity: isLoading ? 0.75 : 1 }}
+                >
+                  {isLoading ? <><Loader2 size={18} className="animate-spin" /><span>Registering Admin...</span></> : <><span>Register Admin Account</span><ArrowRight size={17} /></>}
+                </button>
+                <p style={{ textAlign: 'center', fontSize: '0.78rem', color: '#64748b', margin: 0 }}>
+                  Already have an account?{' '}
+                  <button type="button" onClick={() => { setAuthMode('signin'); setErrorMessage(null); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', fontWeight: 600, fontSize: '0.78rem', padding: 0 }}>
+                    Sign in here
+                  </button>
+                </p>
+              </form>
+            )}
           </div>
         </div>
       )}

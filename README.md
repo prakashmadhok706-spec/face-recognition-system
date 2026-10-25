@@ -101,14 +101,10 @@
 - **Department Distribution:** Interactive doughnut chart detailing student enrollments across engineering and cooperative disciplines.
 - **In-Demand Skills Matrix:** Visual metric bars tracking industry skill demands vs. student cohort capabilities.
 
-### 12. 🤖 CoopSync AI Advisor & Dual-Engine Generative Chatbot
-- **Dual-Engine Architecture:** Compiles rich RAG context from live database records, calls Cloud Generative AI APIs (Google Gemini / Groq / OpenRouter) when configured, and falls back seamlessly to a local semantic engine and knowledge bases when offline.
-- **In-Browser ⚙️ AI Settings Drawer:** Slide-over settings panel in the chat modal allowing users to connect and test any free API key (e.g. Gemini `AIzaSy...` or Groq `gsk_...`) without restarting servers. Config is synchronized via `/api/ai/config`.
-- **Automatic Model Fallback Chains:** Automatically tries backup models (e.g. `gemini-1.5-flash` $\rightarrow$ `gemini-2.0-flash` $\rightarrow$ `gemini-1.5-pro` or `llama-3.3-70b-versatile` $\rightarrow$ `llama-3.1-8b-instant`) if quota or service limits are encountered.
-- **Live Wikipedia Educational Fallback:** Zero-key educational fallback via Wikipedia REST API (`fetch_educational_summary`), allowing the assistant to answer general science, biology, physics, and computing queries (*"What is photosynthesis?"*, *"Theory of relativity"*).
-- **Built-in Academic Knowledge Bank:** Instant pre-loaded answers for core topics (photosynthesis, Python, OpenCV, cooperatives, Haversine formula, ML).
-- **Rich Markdown & Model Attribution:** Renders formatted code blocks, bold text, bullet points, and hyperlinks, displaying the exact model/source badge (e.g. `gemini-1.5-flash`, `llama-3.3-70b`, `Live Wikipedia`) beneath each message.
-- **Contextual ERP Answers & Quick Chips:** Instant query chips for common questions (*"How many attendance days do I have?"*, *"Recommend jobs for my tech stack"*, *"Verify my exam eligibility"*).
+### 12. 🤖 CoopSync AI Advisor & Cloud LLM Chatbot
+- **Dual-Engine Architecture:** Compiles rich RAG context from live database records, calls Cloud Generative AI APIs (Google Gemini / Groq / OpenRouter) when configured, and falls back seamlessly to a local semantic engine when offline.
+- **Immediate Contextual Answers:** Responds to queries such as *"How many attendance days do I have?"*, *"Recommend jobs for my tech stack"*, *"How does GPS geofencing work?"*, and *"Verify my exam eligibility"*.
+- **Quick-Prompt Chips:** Pre-configured query buttons for instant answers.
 
 ### 13. ⚡ Offline Attendance Synchronization
 - **Resilient Local Queue:** Stores biometric check-ins in browser `localStorage` when network connectivity drops in rural centers.

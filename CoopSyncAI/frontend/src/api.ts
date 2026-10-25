@@ -379,6 +379,31 @@ export async function loginUserApi(emailOrId: string, password: string = 'admin1
   }
 }
 
+export async function registerUserApi(data: {
+  name: string;
+  email: string;
+  password: string;
+  role: 'student' | 'admin' | 'trainer';
+  student_id?: string;
+  roll_number?: string;
+  department?: string;
+  semester?: string;
+  degree?: string;
+  gender?: string;
+  skills?: string;
+}) {
+  try {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
+}
+
 export async function getAIConfig() {
   try {
     const res = await fetch(`${API_BASE}/ai/config`);
@@ -409,4 +434,3 @@ export async function testAIChat(query: string, userId: number = 1) {
   });
   return await res.json();
 }
-

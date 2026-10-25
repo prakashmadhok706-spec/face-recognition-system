@@ -67,20 +67,14 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
     const today = new Date().toISOString().split('T')[0];
     const timeNow = new Date().toLocaleTimeString('en-IN', { hour12: false });
     const spoofScore = parseFloat((84 + Math.random() * 12).toFixed(1));
-    const confidence = parseFloat((92 + Math.random() * 6).toFixed(1));
-    const sid = studentId || currentUser?.student_id || '5025088';
+    const confidence = parseFloat((91 + Math.random() * 7).toFixed(1));
+    const sid = studentId || currentUser?.student_id || '';
     
-    const studentDb: Record<string, { name: string; roll: string; dept: string; sem: string }> = {
-      '5025088': { name: 'Puneet', roll: '2400300100305', dept: 'Computer Science & Engineering', sem: 'Sem 5' },
-      '4868448': { name: 'Ranjan', roll: '2400300100314', dept: 'Computer Science & Engineering', sem: 'Sem 5' },
-      '577575':  { name: 'Varun',  roll: '2400300100308', dept: 'Computer Science & Engineering', sem: 'Sem 5' },
-    };
-    
-    const sInfo = studentDb[sid] || {
-      name: studentName || currentUser?.name || 'Student',
-      roll: currentUser?.roll_number || '2400300100305',
-      dept: currentUser?.department || 'Computer Science & Engineering',
-      sem: currentUser?.semester || 'Sem 5',
+    const sInfo = {
+      name: studentName || currentUser?.name || 'Enrolled Student',
+      roll: currentUser?.roll_number || '',
+      dept: currentUser?.department || 'Cooperative Education',
+      sem: currentUser?.semester || '',
     };
     const finalName = studentName || sInfo.name;
 
@@ -740,11 +734,7 @@ export const FaceAttendanceView: React.FC<FaceAttendanceViewProps> = ({
               <Sparkles size={14} color="#818cf8" />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {[
-                { name: 'Puneet', id: '5025088', img: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' },
-                { name: 'Ranjan', id: '4868448', img: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150' },
-                { name: 'Varun', id: '577575', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' }
-              ].map((sample) => (
+              {(studentsList || []).slice(0, 3).map((sample: any) => (
                 <button
                   key={sample.id}
                   onClick={async () => {

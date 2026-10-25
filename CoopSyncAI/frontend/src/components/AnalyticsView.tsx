@@ -84,10 +84,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ currentUser }) => 
   };
 
   const handleExportCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Date,Student,Roll,Method,Status\n" +
-      "2026-09-27,Puneet,2400300100305,Face Recognition,Present\n" +
-      "2026-09-27,Ranjan,2400300100314,Face Recognition,Present\n" +
-      "2026-09-27,Varun,2400300100308,QR Verification,Present\n";
+    const csvContent = "data:text/csv;charset=utf-8,Date,Student,Roll,Method,Status\n";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);

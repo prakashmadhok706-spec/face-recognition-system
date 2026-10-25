@@ -30,7 +30,12 @@ import {
   X,
   PieChart as PieIcon,
   Code2,
-  Target
+  Target,
+  Key,
+  Copy,
+  Eye,
+  EyeOff,
+  Lock
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -104,6 +109,36 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
   const [newSkills, setNewSkills] = useState<string>('Python, OpenCV, Machine Learning');
   const [sampleCount, setSampleCount] = useState<number>(0);
   const [registerMsg, setRegisterMsg] = useState<string | null>(null);
+
+  // Student Portal Credentials Generation
+  const [newEmail, setNewEmail] = useState<string>('');
+  const [newPassword, setNewPassword] = useState<string>('pass123');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [createdStudentCredentials, setCreatedStudentCredentials] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    password: string;
+  } | null>(null);
+  const [copiedCreds, setCopiedCreds] = useState<boolean>(false);
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
+    let pwd = '';
+    for (let i = 0; i < 9; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewPassword(pwd);
+  };
+
+  const autoGenerateEmail = () => {
+    if (newStudentName.trim()) {
+      const clean = newStudentName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.');
+      setNewEmail(`${clean}@coopsync.edu`);
+    } else if (newStudentId.trim()) {
+      setNewEmail(`${newStudentId.trim()}@coopsync.edu`);
+    }
+  };
 
   // Integrated Web Face Enrollment inside Register Student Modal
   const [cameraActive, setCameraActive] = useState<boolean>(false);
@@ -237,17 +272,18 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
         target_samples: 50
       });
 
-      if (res.sharpness !== undefined && res.brightness !== undefined) {
+      if (res.sharpness !== undefined || res.quality?.sharpness !== undefined) {
         setLastQuality({
-          sharpness: res.sharpness,
-          brightness: res.brightness,
-          facesDetected: res.faces_detected,
+          sharpness: res.sharpness ?? res.quality?.sharpness ?? 30,
+          brightness: res.brightness ?? res.quality?.brightness ?? 100,
+          facesDetected: res.faces_detected ?? res.quality?.faces_detected ?? (res.success ? 1 : 0),
           error: res.error
         });
       }
 
-      if (res.success && res.quality_passed) {
+      if (res.success) {
         setSampleCount(res.samples_count);
+        setCameraError(null);
         if (res.samples_count >= 50) {
           setIsAutoCapturing(false);
           isCapturingRef.current = false;
@@ -255,8 +291,12 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
           return false;
         }
         return true;
+      } else {
+        if (res.error) {
+          setCameraError(res.error);
+        }
+        return false;
       }
-      return false;
     } catch {
       return false;
     }
@@ -310,7 +350,10 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
     }
 
     try {
-      // 1. Save student record to SQLite and students.csv with Tech Stack
+      const finalEmail = newEmail.trim() || `${newStudentId.trim()}@coopsync.edu`;
+      const finalPassword = newPassword.trim() || 'pass123';
+
+      // 1. Save student record to SQLite and students.csv with Tech Stack & credentials
       const res = await addStudentApi({
         id: newStudentId.trim(),
         name: newStudentName.trim(),
@@ -320,11 +363,21 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
         year: newYear,
         course: newCourse,
         sem: newSem,
-        skills: newSkills
+        skills: newSkills,
+        email: finalEmail,
+        password: finalPassword
       });
 
       if (res.success) {
         confetti({ particleCount: 70, spread: 80 });
+
+        // Save generated credentials for modal display
+        setCreatedStudentCredentials({
+          id: newStudentId.trim(),
+          name: newStudentName.trim(),
+          email: res.email || finalEmail,
+          password: res.password || finalPassword
+        });
 
         // 2. Trigger retraining if samples collected or auto-retrain checked
         if (autoRetrainOnComplete && sampleCount > 0) {
@@ -995,6 +1048,125 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Student Portal Login Credentials Setup */}
+                  <div style={{
+                    background: 'rgba(16, 185, 129, 0.06)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    borderRadius: '10px',
+                    padding: '14px',
+                    marginTop: '4px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <label style={{ fontSize: '0.82rem', color: '#6ee7b7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Key size={14} color="#10b981" />
+                        Student Portal Login Credentials
+                      </label>
+                      <span className="badge badge-emerald" style={{ fontSize: '0.68rem' }}>
+                        Admin Authorized Only
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      {/* Portal Email */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Portal Email</label>
+                          <button
+                            type="button"
+                            onClick={autoGenerateEmail}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#38bdf8',
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              textDecoration: 'underline'
+                            }}
+                          >
+                            Auto-Generate
+                          </button>
+                        </div>
+                        <input
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          placeholder={newStudentId ? `${newStudentId}@coopsync.edu` : 'student@coopsync.edu'}
+                          style={{
+                            width: '100%',
+                            background: '#0a0f1d',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            padding: '9px 12px',
+                            borderRadius: '8px',
+                            color: '#f8fafc',
+                            fontSize: '0.82rem'
+                          }}
+                        />
+                      </div>
+
+                      {/* Portal Password */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Portal Password</label>
+                          <button
+                            type="button"
+                            onClick={generateRandomPassword}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#38bdf8',
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              textDecoration: 'underline'
+                            }}
+                          >
+                            Generate New
+                          </button>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="pass123"
+                            style={{
+                              width: '100%',
+                              background: '#0a0f1d',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              padding: '9px 36px 9px 12px',
+                              borderRadius: '8px',
+                              color: '#f8fafc',
+                              fontSize: '0.82rem'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            style={{
+                              position: 'absolute',
+                              right: '8px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '2px'
+                            }}
+                            title={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p style={{ margin: '8px 0 0', fontSize: '0.72rem', color: '#94a3b8' }}>
+                      ℹ️ Students log into the Student Portal using these credentials. You can copy the generated login details upon completing registration.
+                    </p>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
@@ -1919,6 +2091,138 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
           initialSelectedStudentId={enrollStudentId}
           onEnrollmentComplete={loadStudents}
         />
+      )}
+
+      {/* Generated Student Credentials Modal */}
+      {createdStudentCredentials && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(5, 8, 22, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#0d1527',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(16, 185, 129, 0.15)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '520px',
+            padding: '24px',
+            animation: 'modalFadeIn 0.25s ease-out'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '10px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <CheckCircle2 size={24} color="#10b981" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#f8fafc', fontWeight: 600 }}>
+                  Student Registered Successfully
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
+                  Student Portal login credentials generated for {createdStudentCredentials.name}
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.2)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              marginBottom: '16px',
+              fontSize: '0.78rem',
+              color: '#a7f3d0',
+              lineHeight: 1.5
+            }}>
+              ✅ Only accounts provisioned by an Administrator can access the Student Portal. Please provide these credentials to the student.
+            </div>
+
+            {/* Credential Details Box */}
+            <div style={{
+              background: '#070b14',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '10px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Student ID</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#f8fafc', fontFamily: 'monospace' }}>
+                  {createdStudentCredentials.id}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Student Name</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#f8fafc' }}>
+                  {createdStudentCredentials.name}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Portal Email</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#38bdf8', fontFamily: 'monospace' }}>
+                  {createdStudentCredentials.email}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Password</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#34d399', fontFamily: 'monospace', letterSpacing: '1px' }}>
+                  {createdStudentCredentials.password}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const text = `CoopSync AI Student Portal Credentials\nStudent: ${createdStudentCredentials.name} (${createdStudentCredentials.id})\nLogin Email: ${createdStudentCredentials.email}\nPassword: ${createdStudentCredentials.password}\nPortal URL: http://localhost:5173`;
+                  navigator.clipboard.writeText(text);
+                  setCopiedCreds(true);
+                  setTimeout(() => setCopiedCreds(false), 2500);
+                }}
+                className="gradient-btn gradient-btn-cyan"
+                style={{ padding: '9px 18px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                {copiedCreds ? <Check size={15} /> : <Copy size={15} />}
+                <span>{copiedCreds ? 'Copied to Clipboard!' : 'Copy Credentials'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreatedStudentCredentials(null)}
+                className="gradient-btn"
+                style={{ padding: '9px 22px', fontSize: '0.82rem' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
