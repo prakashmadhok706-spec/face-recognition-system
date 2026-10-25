@@ -1,8 +1,46 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+
+# Node
 node_modules/
-.env
 dist/
 build/
+
+# Environment secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Logs
 *.log
+
+# ── Database (local dev only) ──
+*.db
+*.sqlite
+*.sqlite3
+CoopSyncAI/backend/coopsync.db
+
+# ── Biometric / Face Data (private) ──
+dataset/
+data/
+*.yml
+!docker-compose.yml
+!CoopSyncAI/docker-compose.yml
+
+# ── Generated certificates / reports ──
+CoopSyncAI/backend/certificates/*.pdf
+
+# ── Trained face model files ──
+*.xml
+*.pickle
+*.pkl
+
+# ── Attendance CSVs (generated data) ──
+attendance.csv
+students.csv
+
+# ── OS noise ──
+.DS_Store
+Thumbs.db
