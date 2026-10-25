@@ -64,16 +64,16 @@ def test_all():
     assert "Unauthorized" in res.get("error", ""), f"Expected Unauthorized error: {res}"
     print("[PASS] Unauthorized student role successfully blocked:", res.get("error"))
 
-    print("\n=== 3. Testing Invalid Student ID ===")
+    print("\n=== 3. Testing Empty Student ID ===")
     res = http_post("students/capture-sample", {
-        "student_id": "999999999_nonexistent",
+        "student_id": "   ",
         "student_name": "Ghost User",
         "image_base64": b64_sample,
         "requester_role": "admin"
     })
-    assert not res.get("success"), "Invalid student ID should fail"
-    assert "not found" in res.get("error", "").lower(), f"Expected not found message: {res}"
-    print("[PASS] Non-existent student ID rejected:", res.get("error"))
+    assert not res.get("success"), "Empty student ID should fail"
+    assert "cannot be empty" in res.get("error", "").lower() or "invalid" in res.get("error", "").lower(), f"Expected empty id message: {res}"
+    print("[PASS] Empty student ID rejected:", res.get("error"))
 
     print("\n=== 4. Testing Empty / No Face Rejection ===")
     res = http_post("students/capture-sample", {

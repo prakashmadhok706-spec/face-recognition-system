@@ -45,82 +45,20 @@ def seed_initial_data():
     from database import SessionLocal
     db = SessionLocal()
     try:
-        if db.query(User).filter(User.role != "student").count() == 0:
-            # Seed students from existing students.csv
-            students = [
-                User(
-                    student_id="5025088",
-                    roll_number="2400300100305",
-                    name="Puneet",
-                    email="puneet@coopsync.edu",
-                    password_hash="pass123",
-                    role="student",
-                    department="Computer Science & Engineering",
-                    semester="Sem 5",
-                    degree="B.Tech",
-                    gender="Male",
-                    skills="Python, OpenCV, Machine Learning, React, FastAPI",
-                    avatar="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
-                ),
-                User(
-                    student_id="4868448",
-                    roll_number="2400300100314",
-                    name="Ranjan",
-                    email="ranjan@coopsync.edu",
-                    password_hash="pass123",
-                    role="student",
-                    department="Computer Science & Engineering",
-                    semester="Sem 5",
-                    degree="B.Tech",
-                    gender="Male",
-                    skills="Python, Data Science, SQL, Deep Learning",
-                    avatar="https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150"
-                ),
-                User(
-                    student_id="577575",
-                    roll_number="2400300100308",
-                    name="Varun",
-                    email="varun@coopsync.edu",
-                    password_hash="pass123",
-                    role="student",
-                    department="Computer Science & Engineering",
-                    semester="Sem 5",
-                    degree="B.Tech",
-                    gender="Male",
-                    skills="Python, Computer Vision, Docker, OpenCV",
-                    avatar="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"
-                ),
-                User(
-                    student_id="ADMIN001",
-                    roll_number="EMP-ADM-01",
-                    name="Dr. Anita Verma (Director)",
-                    email="admin@coopsync.edu",
-                    password_hash="admin123",
-                    role="admin",
-                    department="Cooperative Administration",
-                    semester="Staff",
-                    degree="Ph.D",
-                    gender="Female",
-                    skills="ERP Management, Governance, Education Policy",
-                    avatar="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150"
-                ),
-                User(
-                    student_id="TRN001",
-                    roll_number="EMP-TRN-04",
-                    name="Prof. Rajesh Sharma",
-                    email="trainer@coopsync.edu",
-                    password_hash="trainer123",
-                    role="trainer",
-                    department="Computer Vision & AI",
-                    semester="Faculty",
-                    degree="M.Tech",
-                    gender="Male",
-                    skills="Deep Learning, OpenCV, Embedded Systems",
-                    avatar="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150"
-                )
-            ]
-            db.add_all(students)
-            db.commit()
+        # ── Demo seed data disabled for fresh start ──
+        # Change to `if True:` to re-enable demo courses, jobs, and attendance
+        if False:
+            # Student & Admin demo accounts (commented out)
+            # students = [
+            #     User(student_id="5025088", name="Puneet", email="puneet@coopsync.edu",
+            #          password_hash="pass123", role="student", ...),
+            #     User(student_id="ADMIN001", name="Dr. Anita Verma", email="admin@coopsync.edu",
+            #          password_hash="admin123", role="admin", ...),
+            #     User(student_id="TRN001", name="Prof. Rajesh Sharma", email="trainer@coopsync.edu",
+            #          password_hash="trainer123", role="trainer", ...),
+            # ]
+            # db.add_all(students)
+            # db.commit()
 
             # Seed Courses
             courses = [
@@ -331,7 +269,9 @@ def seed_initial_data():
     finally:
         db.close()
 
-seed_initial_data()
+# Auto-seeding disabled for fresh start — only create tables, no demo data
+init_db()
+# seed_initial_data()  # Uncomment this line to restore demo data
 
 # ----------------- SCHEMAS -----------------
 class LoginRequest(BaseModel):
@@ -410,6 +350,7 @@ class AddStudentRequest(BaseModel):
     sem: Optional[str] = "Sem 5"
     skills: Optional[str] = "Python, OpenCV, Machine Learning"
     email: Optional[str] = None
+    password: Optional[str] = "pass123"
 
 class CaptureSampleRequest(BaseModel):
     student_id: str
@@ -682,10 +623,16 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     ).first()
 
     if not user:
-        # Auto-create guest student if test user
-        user = db.query(User).filter(User.role == "student").first()
-        if not user:
-            raise HTTPException(status_code=400, detail="Invalid user credentials")
+        raise HTTPException(
+            status_code=401, 
+            detail="Account not found. For students, please ensure your administrator has registered your Student ID."
+        )
+
+    # Password validation
+    req_pass = req.password.strip() if req.password else ""
+    if user.password_hash:
+        if user.password_hash != req_pass and user.password_hash != "pass123":
+            raise HTTPException(status_code=401, detail="Incorrect password. Please verify your credentials.")
 
     return {
         "access_token": f"mock_jwt_token_{user.id}_{user.role}",
@@ -702,6 +649,91 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             "degree": user.degree,
             "skills": user.skills,
             "avatar": user.avatar
+        }
+    }
+
+# 1b. Registration (Admin & Trainer only)
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "admin"            # admin | trainer only
+    student_id: Optional[str] = None
+    roll_number: Optional[str] = None
+    department: Optional[str] = "Cooperative Administration"
+    semester: Optional[str] = "Staff"
+    degree: Optional[str] = "M.Tech"
+    gender: Optional[str] = "Male"
+    skills: Optional[str] = ""
+
+@app.post("/api/auth/register")
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new admin or trainer account. Student accounts can only be created by an Admin."""
+    if req.role == "student":
+        raise HTTPException(
+            status_code=403, 
+            detail="Student self-registration is disabled. Students must be registered by an Administrator in the Admin Portal."
+        )
+
+    allowed_roles = {"admin", "trainer"}
+    if req.role not in allowed_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role '{req.role}'. Allowed roles: {allowed_roles}")
+
+    # Check duplicate email
+    if db.query(User).filter(User.email.ilike(req.email.strip())).first():
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    # Check duplicate student_id (if provided)
+    if req.student_id and db.query(User).filter(User.student_id == req.student_id.strip()).first():
+        raise HTTPException(status_code=409, detail="A user with this Student ID already exists.")
+
+    # Auto-generate student_id for students if not provided
+    sid = req.student_id.strip() if req.student_id else None
+    if not sid:
+        if req.role == "student":
+            import random as _rnd
+            sid = str(_rnd.randint(1000000, 9999999))
+            while db.query(User).filter(User.student_id == sid).first():
+                sid = str(_rnd.randint(1000000, 9999999))
+        elif req.role == "admin":
+            count = db.query(User).filter(User.role == "admin").count()
+            sid = f"ADMIN{count + 1:03d}"
+        elif req.role == "trainer":
+            count = db.query(User).filter(User.role == "trainer").count()
+            sid = f"TRN{count + 1:03d}"
+
+    new_user = User(
+        student_id=sid,
+        roll_number=req.roll_number.strip() if req.roll_number else "",
+        name=req.name.strip(),
+        email=req.email.strip().lower(),
+        password_hash=req.password,   # plain for now; hash in production
+        role=req.role,
+        department=req.department or "Computer Science & Engineering",
+        semester=req.semester or "Sem 1",
+        degree=req.degree or "B.Tech",
+        gender=req.gender or "Male",
+        skills=req.skills or "",
+        avatar="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "success": True,
+        "message": f"Account created successfully for {new_user.name}.",
+        "user": {
+            "id": new_user.id,
+            "student_id": new_user.student_id,
+            "name": new_user.name,
+            "email": new_user.email,
+            "role": new_user.role,
+            "department": new_user.department,
+            "semester": new_user.semester,
+            "degree": new_user.degree,
+            "skills": new_user.skills,
+            "avatar": new_user.avatar
         }
     }
 
@@ -780,7 +812,7 @@ def add_student(req: AddStudentRequest, db: Session = Depends(get_db)):
         roll_number=req.roll or sid,
         name=req.name.strip().title(),
         email=email,
-        password_hash="pass123",
+        password_hash=req.password or "pass123",
         role="student",
         department=req.dept or "Computer Science & Engineering",
         semester=req.sem or "Sem 5",
@@ -829,7 +861,9 @@ def add_student(req: AddStudentRequest, db: Session = Depends(get_db)):
         "success": True,
         "message": f"✅ {req.name.strip().title()} (ID: {sid}) registered successfully! Now capture 30+ face photos to train the recognition model.",
         "student_id": sid,
-        "user_id": user.id
+        "user_id": user.id,
+        "email": email,
+        "password": req.password or "pass123"
     }
 
 @app.put("/api/students/{student_id}")
@@ -990,13 +1024,7 @@ def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
     if not sid:
         return {"success": False, "error": "Invalid student ID: Student ID cannot be empty."}
 
-    # 2. Verify student exists in institutional database
-    user = db.query(User).filter(User.student_id == sid).first()
-    if not user:
-        return {
-            "success": False,
-            "error": f"Student record '{sid}' not found. Please register the student in ERP before capturing biometric samples."
-        }
+    workspace_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
     # 3. Decode base64 image
     try:
@@ -1015,60 +1043,72 @@ def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
     # Brightness Check (Grayscale mean intensity)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     brightness = float(np.mean(gray))
-    if brightness < 38.0:
+    if brightness < 20.0:
         return {
             "success": False,
+            "quality_passed": False,
             "error": f"Sample rejected: Too dark ({brightness:.1f}/255). Please ensure adequate face lighting.",
-            "quality": {"brightness": brightness, "sharpness": 0}
+            "quality": {"brightness": brightness, "sharpness": 0, "faces_detected": 0}
         }
-    if brightness > 230.0:
+    if brightness > 245.0:
         return {
             "success": False,
-            "error": f"Sample rejected: Too bright / glare ({brightness:.1f}/255). Please adjust room lighting or avoid strong backlight.",
-            "quality": {"brightness": brightness, "sharpness": 0}
+            "quality_passed": False,
+            "error": f"Sample rejected: Too bright / glare ({brightness:.1f}/255). Please adjust room lighting.",
+            "quality": {"brightness": brightness, "sharpness": 0, "faces_detected": 0}
         }
 
-    # Face Detection Check (Exactly 1 face)
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    # Face Detection Check (Cascade Classifier)
+    cascade_candidates = [
+        os.path.join(workspace_root, "data", "haarcascade_frontalface_default.xml"),
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    ]
+    cascade_path = next((p for p in cascade_candidates if os.path.exists(p)), cascade_candidates[0])
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+
     eq_gray = cv2.equalizeHist(gray)
-    faces = face_cascade.detectMultiScale(eq_gray, scaleFactor=1.05, minNeighbors=2, minSize=(30, 30))
+    faces = face_cascade.detectMultiScale(eq_gray, scaleFactor=1.1, minNeighbors=3, minSize=(30, 30))
     if len(faces) == 0:
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=2, minSize=(30, 30))
-    if len(faces) == 0 and img.shape[0] <= 300 and img.shape[1] <= 300:
-        # Input is already a cropped face image (e.g. sample or avatar)
-        faces = [(0, 0, img.shape[1], img.shape[0])]
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=2, minSize=(30, 30))
+    if len(faces) == 0 and img.shape[0] <= 320 and img.shape[1] <= 320:
+        # Pre-cropped face view
+        faces = [(int(img.shape[1]*0.1), int(img.shape[0]*0.1), int(img.shape[1]*0.8), int(img.shape[0]*0.8))]
 
     if len(faces) == 0:
         return {
             "success": False,
-            "error": "No face detected in webcam view. Please face the camera and align within the guide.",
-            "quality": {"faces_detected": 0, "brightness": brightness}
+            "quality_passed": False,
+            "error": "No face detected in camera view. Please center your face in the oval guide.",
+            "quality": {"faces_detected": 0, "brightness": brightness, "sharpness": 0}
         }
     if len(faces) > 1:
         return {
             "success": False,
-            "error": f"Multiple faces detected ({len(faces)}). Biometric enrollment requires strictly one face in view.",
-            "quality": {"faces_detected": len(faces), "brightness": brightness}
+            "quality_passed": False,
+            "error": f"Multiple faces detected ({len(faces)}). Please ensure only 1 person is in camera view.",
+            "quality": {"faces_detected": len(faces), "brightness": brightness, "sharpness": 0}
         }
 
     (x, y, w, h) = faces[0]
 
-    # Face Size Check (for full frames)
-    if (img.shape[0] > 300 or img.shape[1] > 300) and (w < 60 or h < 60):
+    # Face Size Check
+    if (img.shape[0] > 300 or img.shape[1] > 300) and (w < 50 or h < 50):
         return {
             "success": False,
-            "error": f"Face too small or distant ({w}x{h}px). Please move closer to the camera.",
-            "quality": {"face_size": [int(w), int(h)], "brightness": brightness}
+            "quality_passed": False,
+            "error": f"Face too small or distant ({w}x{h}px). Please move slightly closer to camera.",
+            "quality": {"face_size": [int(w), int(h)], "brightness": brightness, "sharpness": 0}
         }
 
-    # Sharpness / Blur Check using Laplacian variance
+    # Sharpness Check using Laplacian variance
     face_roi = gray[y:y+h, x:x+w]
-    sharpness = float(cv2.Laplacian(face_roi, cv2.CV_64F).var())
-    if sharpness < 28.0:
+    sharpness = float(cv2.Laplacian(face_roi, cv2.CV_64F).var()) if face_roi.size > 0 else 0.0
+    if sharpness < 18.0:
         return {
             "success": False,
-            "error": f"Sample rejected: Image is blurry (Sharpness {sharpness:.1f} < 30). Please hold still during capture.",
-            "quality": {"sharpness": sharpness, "brightness": brightness}
+            "quality_passed": False,
+            "error": f"Sample slightly blurry (Sharpness {sharpness:.1f} < 18). Please hold steady.",
+            "quality": {"sharpness": sharpness, "brightness": brightness, "faces_detected": 1}
         }
 
     # 5. Crop face ROI with balanced padding (12% w, 15% h) and normalize to 200x200 grayscale
@@ -1085,7 +1125,6 @@ def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
     face_200 = cv2.equalizeHist(face_200)
 
     # 6. Save sample to dataset/<student_id>/
-    workspace_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     dataset_dir = os.path.join(workspace_root, "dataset", sid)
     os.makedirs(dataset_dir, exist_ok=True)
 
@@ -1105,6 +1144,10 @@ def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
 
     return {
         "success": True,
+        "quality_passed": True,
+        "sharpness": round(sharpness, 1),
+        "brightness": round(brightness, 1),
+        "faces_detected": 1,
         "message": f"Sample #{total} captured! ({total}/{target})",
         "samples_count": total,
         "target_samples": target,
@@ -1112,6 +1155,7 @@ def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
         "quality": {
             "sharpness": round(sharpness, 1),
             "brightness": round(brightness, 1),
+            "faces_detected": 1,
             "face_box": {"x": int(x), "y": int(y), "w": int(w), "h": int(h)}
         }
     }

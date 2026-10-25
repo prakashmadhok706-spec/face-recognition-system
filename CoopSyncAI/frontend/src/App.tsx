@@ -15,90 +15,23 @@ import { fetchHealth, fetchStudents, fetchAdmins, syncOfflineAttendance } from '
 import { UserProfile } from './types';
 
 
-const DEFAULT_USERS: UserProfile[] = [
-  {
-    id: 1,
-    student_id: '5025088',
-    roll_number: '2400300100305',
-    name: 'Puneet',
-    email: 'puneet@coopsync.edu',
-    role: 'student',
-    department: 'Computer Science & Engineering',
-    semester: 'Sem 5',
-    degree: 'B.Tech',
-    skills: 'Python, OpenCV, Machine Learning, React, FastAPI',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
-  },
-  {
-    id: 2,
-    student_id: '4868448',
-    roll_number: '2400300100314',
-    name: 'Ranjan',
-    email: 'ranjan@coopsync.edu',
-    role: 'student',
-    department: 'Computer Science & Engineering',
-    semester: 'Sem 5',
-    degree: 'B.Tech',
-    skills: 'Python, Data Science, SQL, Deep Learning',
-    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150'
-  },
-  {
-    id: 3,
-    student_id: 'NCCT001',
-    roll_number: 'NCCT-ADM-01',
-    name: 'NCCT National Admin',
-    email: 'ncct.admin@coopsync.gov.in',
-    role: 'ncct_admin',
-    department: 'National Council for Cooperative Training',
-    semester: 'HQ Admin',
-    degree: 'Ph.D',
-    skills: 'National Monitoring, Policy, ERP Governance',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'
-  },
-  {
-    id: 4,
-    student_id: 'ADMIN001',
-    roll_number: 'EMP-ADM-01',
-    name: 'Dr. Anita Verma (VAMNICOM Director)',
-    email: 'admin@coopsync.edu',
-    role: 'institution_admin',
-    department: 'VAMNICOM Pune Administration',
-    semester: 'Director',
-    degree: 'Ph.D',
-    skills: 'ERP Management, Governance, Education Policy',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'
-  },
-  {
-    id: 5,
-    student_id: 'TRN001',
-    roll_number: 'EMP-TRN-04',
-    name: 'Prof. Rajesh Sharma (Faculty)',
-    email: 'trainer@coopsync.edu',
-    role: 'trainer',
-    department: 'Computer Vision & AI',
-    semester: 'Faculty',
-    degree: 'M.Tech',
-    skills: 'Deep Learning, OpenCV, Embedded Systems',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'
-  },
-  {
-    id: 6,
-    student_id: 'EMP001',
-    roll_number: 'AMUL-HR-01',
-    name: 'AMUL Recruiter / Employer',
-    email: 'careers@amul.coop',
-    role: 'employer',
-    department: 'AMUL Talent Acquisition',
-    semester: 'HR Manager',
-    skills: 'Dairy Operations, Placement, Recruitment',
-    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150'
-  }
-];
+const EMPTY_USER: UserProfile = {
+  id: 0,
+  student_id: '',
+  roll_number: '',
+  name: 'Guest User',
+  email: '',
+  role: 'student',
+  department: 'General',
+  semester: 'Sem 1',
+  skills: '',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+};
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(DEFAULT_USERS);
-  const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_USERS[0]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(EMPTY_USER);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
       const saved = sessionStorage.getItem('coopsync_session');
@@ -154,7 +87,7 @@ export const App: React.FC = () => {
         semester: s.semester,
         skills: s.skills,
         avatar: s.avatar
-      })) : [DEFAULT_USERS[0], DEFAULT_USERS[1]];
+      })) : [];
 
       const mergedAdmins = (admins && admins.length > 0) ? admins.map((a: any) => ({
         id: a.id,
@@ -168,16 +101,18 @@ export const App: React.FC = () => {
         degree: a.degree,
         skills: a.skills,
         avatar: a.avatar
-      })) : [DEFAULT_USERS[2], DEFAULT_USERS[3], DEFAULT_USERS[4], DEFAULT_USERS[5]];
+      })) : [];
 
       const merged = [...mergedStudents, ...mergedAdmins];
       setAllUsers(merged);
-      setCurrentUser(prev => {
-        const freshProfile = merged.find(u => u.id === prev.id);
-        return freshProfile || prev;
-      });
+      if (merged.length > 0) {
+        setCurrentUser(prev => {
+          const freshProfile = merged.find(u => u.id === prev.id);
+          return freshProfile || merged[0];
+        });
+      }
     } catch (e) {
-      console.warn('Using default users', e);
+      console.warn('Error loading users', e);
     }
   };
 
