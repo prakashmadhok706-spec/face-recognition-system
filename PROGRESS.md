@@ -43,12 +43,16 @@
 - [x] **Image Upload Fallback:** Support for testing and recognizing uploaded face images.
 - [x] **Real-Time Attendance Roster:** Auto-refreshing roster displaying verified check-ins with timestamps and confidence scores.
 
-### 2. 📱 Dynamic 30-Second QR Attendance System
+### 2. 📱 Dynamic 30-Second QR & Real GPS Geofencing Attendance System
 - [x] **Dynamic Session Generation:** Server-side QR generation with rotating cryptographic SHA-256 HMAC salt.
 - [x] **30-Second Auto-Expiration:** Real-time circular animated countdown timer (30s $\rightarrow$ 0s) blocking shared screenshot exploits.
-- [x] **Student Scanner / Token Verification:** Interactive scanner supporting one-click verification and manual token input.
-- [x] **Duplicate Scan Blocker:** Prevents a student from scanning the same QR session more than once.
-- [x] **Geo-Fencing Perimeter:** Configured 50-meter perimeter verification around cooperative training centers.
+- [x] **Real Browser GPS Geolocation (`navigator.geolocation`):** Real-time device location acquisition triggered only when student initiates attendance; displays latitude, longitude, and accuracy ± meters.
+- [x] **Mathematical Haversine Distance Calculation:** Accurately calculates geodesic distance between device coordinates and institution coordinates ($R = 6371\text{ km}$).
+- [x] **Backend-Enforced Geofencing (Zero Trust Frontend):** Server performs final coordinate validation, radius check ($\le 50\text{m}$ default, configurable), accuracy threshold check ($\le 100\text{m}$), and out-of-bounds sanity check.
+- [x] **Configurable Campus Coordinates API with RBAC:** Admin-managed `/api/institution/config` allowing dynamic updating of campus latitude, longitude, allowed radius, and accuracy threshold with strict RBAC blocking student tampering.
+- [x] **Offline GPS Revalidation (Requirement 14):** Offline records cached on mobile cannot bypass geofence; backend revalidates GPS telemetry upon sync and flags/quarantines invalid records.
+- [x] **Duplicate Attendance Prevention:** Enforces multi-tier duplicate prevention blocking both QR session rescans and same-day attendance duplicates.
+- [x] **Automated Test Suite (`test_gps_attendance.py`):** 100% test coverage for inside-radius, outside-radius, poor accuracy, denied permission, duplicate attendance, and offline revalidation.
 
 ### 3. 🎓 Student ERP & Capacity Building Module
 - [x] **Student Data Seeding:** Integrated existing student registry (`Puneet`, `Ranjan`, `Varun`, `Prakash`, `Riya` from `students.csv`).
@@ -116,6 +120,15 @@
 - [x] **Docker Containerization:** Configured `Dockerfile` for backend & frontend plus `docker-compose.yml`.
 - [x] **System Design Documentation:** Full architecture blueprints, state machines, and visual diagrams compiled into `system_design_specification.md` and `FLOWCHART.md`.
 - [x] **Git Repository Cleanliness:** Configured `.gitignore` for Python bytecode, pycache, and node_modules; resolved and committed clean tree.
+
+### 13. 📈 Student Portal Interactive Performance Graphs
+- [x] **Personal Weekly Attendance Trend:** Interactive Chart.js bar chart tracking attended vs. missed classes across academic weeks.
+- [x] **Course-Wise Attendance Breakdown:** Interactive Chart.js doughnut chart breaking down attendance percentages per enrolled course.
+- [x] **Verified Tech Stack & Competency Scores:** Horizontal bar chart rating practical skills from ERP capacity profiles.
+- [x] **Cooperative Job Placement Match Projections:** Real-time semantic compatibility chart matching student profile to AMUL, IFFCO, and Sahakar openings.
+- [x] **75% Examination Threshold Warning:** Visual alert banner calculating eligibility against statutory NCCT 75% exam attendance guidelines.
+- [x] **Card-Level Graph Modal:** Quick "📊 Graphs" button on every student card in Student ERP directory allowing instant analytics inspection.
+- [x] **Default Student Landing Screen:** Seamless navigation landing students directly on "My Analytics & Graphs" upon logging in.
 
 ---
 

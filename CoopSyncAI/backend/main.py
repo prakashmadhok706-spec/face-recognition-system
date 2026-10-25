@@ -16,10 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+import math
 
-from database import init_db, get_db, User, Attendance, Course, Certificate, Job, JobApplication
+from database import init_db, get_db, User, Attendance, Course, Certificate, Job, JobApplication, InstitutionConfig
 from face_engine import face_engine
-from qr_engine import generate_dynamic_attendance_qr, verify_attendance_qr
+from qr_engine import generate_dynamic_attendance_qr, verify_attendance_qr, mark_qr_session_used
 from certificate_engine import generate_pdf_certificate, CERTIFICATES_DIR
 from ai_engine import calculate_skill_match, get_ai_chat_response
 
@@ -341,10 +342,30 @@ class FaceRecognizeRequest(BaseModel):
     image_base64: str
     liveness_token: Optional[str] = None
     student_id: Optional[str] = None   # Hint from frontend for demo/sample mode
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    session_id: Optional[str] = None
+    device_info: Optional[str] = None
 
 class QRVerifyRequest(BaseModel):
     qr_text: str
     student_id: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    timestamp: Optional[int] = None
+    session_id: Optional[str] = None
+    device_info: Optional[str] = None
+
+class InstitutionConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    allowed_radius_meters: Optional[float] = None
+    max_accuracy_threshold: Optional[float] = None
+    enforce_geofence: Optional[bool] = None
+    requester_role: Optional[str] = "admin"
 
 class ChatRequest(BaseModel):
     query: str
@@ -371,6 +392,9 @@ class OfflineSyncItem(BaseModel):
     time: str
     method: str
     confidence: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
 
 class OfflineSyncRequest(BaseModel):
     records: List[OfflineSyncItem]
@@ -420,7 +444,221 @@ class ManualAttendanceRequest(BaseModel):
     method: Optional[str] = "Manual Override (Admin)"
 
 
+# ----------------- GPS & GEOFENCING CORE LOGIC (SIH26087) -----------------
+
+def calculate_haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great circle distance between two points on Earth in meters
+    using the Haversine formula:
+    a = sin²(Δφ/2) + cos(φ1)⋅cos(φ2)⋅sin²(Δλ/2)
+    c = 2⋅atan2(√a, √(1−a))
+    d = R⋅c
+    """
+    R = 6371000.0  # Earth's mean radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2.0) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(delta_lambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+
+    return round(R * c, 2)
+
+def validate_student_gps(
+    lat: Optional[float],
+    lon: Optional[float],
+    accuracy: Optional[float],
+    db: Session,
+    require_gps: bool = True
+) -> dict:
+    """
+    Authoritative backend validation for student device GPS coordinates against
+    the institution's configured latitude, longitude, and geofence perimeter.
+    Never trusts client-side distance checks alone.
+    """
+    cfg = db.query(InstitutionConfig).first()
+    if not cfg:
+        cfg = InstitutionConfig(
+            name="Cooperative Skill Center (NCCT / VAMNICOM)",
+            latitude=28.6139,
+            longitude=77.2090,
+            allowed_radius_meters=50.0,
+            max_accuracy_threshold=100.0,
+            enforce_geofence=True
+        )
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+
+    if not cfg.enforce_geofence:
+        return {
+            "valid": True,
+            "distance": 0.0,
+            "status": "Geofence Enforcement Disabled",
+            "config": cfg
+        }
+
+    # 1. Reject if GPS coordinates missing
+    if lat is None or lon is None:
+        if require_gps:
+            return {
+                "valid": False,
+                "error": "Real device GPS coordinates are required for attendance verification. Please grant location access.",
+                "code": "MISSING_COORDINATES"
+            }
+        return {"valid": True, "distance": 0.0, "status": "No GPS Provided", "config": cfg}
+
+    # 2. Reject if coordinates are invalid numeric or out of geographic bounds
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except (ValueError, TypeError):
+        return {
+            "valid": False,
+            "error": "Invalid GPS coordinate numerical format.",
+            "code": "INVALID_COORDINATES"
+        }
+
+    if math.isnan(lat_f) or math.isnan(lon_f) or math.isinf(lat_f) or math.isinf(lon_f):
+        return {
+            "valid": False,
+            "error": "GPS coordinates cannot be NaN or Infinite.",
+            "code": "INVALID_COORDINATES"
+        }
+
+    if not (-90.0 <= lat_f <= 90.0) or not (-180.0 <= lon_f <= 180.0):
+        return {
+            "valid": False,
+            "error": f"GPS coordinates ({lat_f}, {lon_f}) are outside valid geographic latitude/longitude bounds (-90..90, -180..180).",
+            "code": "OUT_OF_BOUNDS_COORDINATES"
+        }
+
+    # 3. Reject if GPS accuracy is too poor
+    max_acc = cfg.max_accuracy_threshold or 100.0
+    if accuracy is not None:
+        try:
+            acc_val = float(accuracy)
+            if acc_val > max_acc:
+                return {
+                    "valid": False,
+                    "error": f"GPS signal accuracy is too poor (±{acc_val:.1f}m > allowed ±{max_acc:.1f}m). Please enable High Accuracy GPS and move near an open window or outdoors.",
+                    "code": "POOR_ACCURACY",
+                    "accuracy": acc_val,
+                    "max_accuracy": max_acc
+                }
+        except (ValueError, TypeError):
+            pass
+
+    # 4. Authoritative backend Haversine distance computation
+    dist = calculate_haversine_distance(lat_f, lon_f, cfg.latitude, cfg.longitude)
+    allowed_r = cfg.allowed_radius_meters or 50.0
+
+    # 5. Reject if outside allowed institution radius
+    if dist > allowed_r:
+        return {
+            "valid": False,
+            "error": f"Outside allowed attendance geofence! You are {dist:.1f}m away from {cfg.name} (maximum allowed radius: {allowed_r:.0f}m).",
+            "code": "OUTSIDE_RADIUS",
+            "distance": dist,
+            "allowed_radius": allowed_r
+        }
+
+    return {
+        "valid": True,
+        "distance": dist,
+        "status": f"Verified ({dist:.1f}m <= {allowed_r:.0f}m)",
+        "config": cfg
+    }
+
+
 # ----------------- ROUTES -----------------
+
+@app.get("/api/institution/config")
+def get_institution_config(db: Session = Depends(get_db)):
+    """Fetch current institution geolocation and geofence parameters"""
+    cfg = db.query(InstitutionConfig).first()
+    if not cfg:
+        cfg = InstitutionConfig(
+            name="Cooperative Skill Center (NCCT / VAMNICOM)",
+            latitude=28.6139,
+            longitude=77.2090,
+            allowed_radius_meters=50.0,
+            max_accuracy_threshold=100.0,
+            enforce_geofence=True
+        )
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+    return {
+        "success": True,
+        "config": {
+            "id": cfg.id,
+            "name": cfg.name,
+            "latitude": cfg.latitude,
+            "longitude": cfg.longitude,
+            "allowed_radius_meters": cfg.allowed_radius_meters,
+            "max_accuracy_threshold": cfg.max_accuracy_threshold,
+            "enforce_geofence": cfg.enforce_geofence,
+            "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None
+        }
+    }
+
+@app.put("/api/institution/config")
+def update_institution_config(req: InstitutionConfigUpdate, db: Session = Depends(get_db)):
+    """Admin endpoint to configure campus coordinates and allowed attendance radius"""
+    allowed_roles = {"admin", "ncct_admin", "institution_admin", "trainer"}
+    if req.requester_role and req.requester_role not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized: Only institution administrators and trainers can update geofence parameters."
+        )
+
+    cfg = db.query(InstitutionConfig).first()
+    if not cfg:
+        cfg = InstitutionConfig()
+        db.add(cfg)
+
+    if req.name is not None and req.name.strip():
+        cfg.name = req.name.strip()
+    if req.latitude is not None:
+        if not (-90.0 <= req.latitude <= 90.0):
+            raise HTTPException(status_code=400, detail="Latitude must be between -90 and 90 degrees.")
+        cfg.latitude = float(req.latitude)
+    if req.longitude is not None:
+        if not (-180.0 <= req.longitude <= 180.0):
+            raise HTTPException(status_code=400, detail="Longitude must be between -180 and 180 degrees.")
+        cfg.longitude = float(req.longitude)
+    if req.allowed_radius_meters is not None:
+        if req.allowed_radius_meters <= 0:
+            raise HTTPException(status_code=400, detail="Allowed radius must be greater than 0 meters.")
+        cfg.allowed_radius_meters = float(req.allowed_radius_meters)
+    if req.max_accuracy_threshold is not None:
+        if req.max_accuracy_threshold <= 0:
+            raise HTTPException(status_code=400, detail="Max accuracy threshold must be greater than 0 meters.")
+        cfg.max_accuracy_threshold = float(req.max_accuracy_threshold)
+    if req.enforce_geofence is not None:
+        cfg.enforce_geofence = bool(req.enforce_geofence)
+
+    cfg.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(cfg)
+    return {
+        "success": True,
+        "message": "Institution geofence parameters updated successfully.",
+        "config": {
+            "id": cfg.id,
+            "name": cfg.name,
+            "latitude": cfg.latitude,
+            "longitude": cfg.longitude,
+            "allowed_radius_meters": cfg.allowed_radius_meters,
+            "max_accuracy_threshold": cfg.max_accuracy_threshold,
+            "enforce_geofence": cfg.enforce_geofence,
+            "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None
+        }
+    }
 
 @app.get("/api/health")
 def health_check():
@@ -1191,6 +1429,24 @@ def recognize_face(req: FaceRecognizeRequest, db: Session = Depends(get_db)):
     is_duplicate = existing is not None
     attendance_record = None
 
+    # Validate GPS telemetry if provided with face attendance
+    gps_result = validate_student_gps(
+        lat=req.latitude,
+        lon=req.longitude,
+        accuracy=req.accuracy,
+        db=db,
+        require_gps=False
+    )
+
+    if not gps_result["valid"]:
+        return {
+            "success": False,
+            "error": gps_result["error"],
+            "code": gps_result.get("code", "GPS_VERIFICATION_FAILED"),
+            "distance": gps_result.get("distance"),
+            "allowed_radius": gps_result.get("allowed_radius")
+        }
+
     if not is_duplicate:
         att = Attendance(
             user_id=user.id,
@@ -1198,10 +1454,17 @@ def recognize_face(req: FaceRecognizeRequest, db: Session = Depends(get_db)):
             student_name=user.name,
             date=today,
             time=time_now,
-            method="Face Recognition",
+            method="Face Recognition" if req.latitude is None else "Face AI + GPS Verified",
             confidence=res.get("confidence", 95.0),
             liveness_verified=res.get("liveness_verified", True),
-            status="Present"
+            status="Present",
+            latitude=req.latitude,
+            longitude=req.longitude,
+            accuracy=req.accuracy,
+            distance=gps_result.get("distance"),
+            geofence_status=gps_result.get("status", "Verified (Within Radius)"),
+            session_id=req.session_id,
+            device_info=req.device_info
         )
         db.add(att)
         db.commit()
@@ -1210,14 +1473,18 @@ def recognize_face(req: FaceRecognizeRequest, db: Session = Depends(get_db)):
             "id": att.id,
             "date": att.date,
             "time": att.time,
-            "method": att.method
+            "method": att.method,
+            "distance": att.distance,
+            "geofence_status": att.geofence_status
         }
     else:
         attendance_record = {
             "id": existing.id,
             "date": existing.date,
             "time": existing.time,
-            "method": existing.method
+            "method": existing.method,
+            "distance": existing.distance,
+            "geofence_status": existing.geofence_status
         }
 
     return {
@@ -1268,11 +1535,14 @@ def verify_qr(req: QRVerifyRequest, db: Session = Depends(get_db)):
     verify_res = verify_attendance_qr(req.qr_text, student_id)
     
     if not verify_res.get("valid"):
-        return {"success": False, "error": verify_res.get("error")}
+        return {"success": False, "error": verify_res.get("error"), "code": "INVALID_OR_EXPIRED_QR"}
 
     user = db.query(User).filter(
         (User.student_id == student_id) | (User.id == 1)
     ).first()
+
+    if not user:
+        return {"success": False, "error": f"Student ID '{student_id}' not found.", "code": "STUDENT_NOT_FOUND"}
 
     today = datetime.now().strftime("%Y-%m-%d")
     time_now = datetime.now().strftime("%H:%M:%S")
@@ -1287,7 +1557,26 @@ def verify_qr(req: QRVerifyRequest, db: Session = Depends(get_db)):
             "success": True,
             "is_duplicate": True,
             "message": "Duplicate scan blocked. Attendance is already recorded today.",
-            "student_name": user.name
+            "student_name": user.name,
+            "code": "DUPLICATE_ATTENDANCE"
+        }
+
+    # Authoritative Backend GPS Geofence Validation
+    gps_result = validate_student_gps(
+        lat=req.latitude,
+        lon=req.longitude,
+        accuracy=req.accuracy,
+        db=db,
+        require_gps=True
+    )
+
+    if not gps_result["valid"]:
+        return {
+            "success": False,
+            "error": gps_result["error"],
+            "code": gps_result.get("code", "GPS_VERIFICATION_FAILED"),
+            "distance": gps_result.get("distance"),
+            "allowed_radius": gps_result.get("allowed_radius")
         }
 
     att = Attendance(
@@ -1296,27 +1585,43 @@ def verify_qr(req: QRVerifyRequest, db: Session = Depends(get_db)):
         student_name=user.name,
         date=today,
         time=time_now,
-        method="QR Verification",
+        method="QR + Real GPS Verification",
         confidence=100.0,
         liveness_verified=True,
-        status="Present"
+        status="Present",
+        latitude=req.latitude,
+        longitude=req.longitude,
+        accuracy=req.accuracy,
+        distance=gps_result.get("distance"),
+        geofence_status=gps_result.get("status", "Verified (Within Radius)"),
+        session_id=req.session_id or verify_res.get("session_id"),
+        device_info=req.device_info
     )
     db.add(att)
     db.commit()
+    db.refresh(att)
+    if verify_res.get("session_id"):
+        mark_qr_session_used(verify_res.get("session_id"), student_id)
 
     return {
         "success": True,
         "is_duplicate": False,
-        "message": "QR Attendance verified and marked successfully!",
+        "message": f"QR Attendance verified & marked successfully within campus geofence! ({gps_result.get('distance')}m from campus)",
         "student_name": user.name,
         "session_name": verify_res.get("session_name", "Hall 4B"),
-        "time": time_now
+        "time": time_now,
+        "distance": gps_result.get("distance"),
+        "accuracy": req.accuracy,
+        "geofence_status": att.geofence_status
     }
 
 # 4. Offline Attendance Sync
 @app.post("/api/attendance/sync-offline")
 def sync_offline_records(req: OfflineSyncRequest, db: Session = Depends(get_db)):
     synced_count = 0
+    flagged_count = 0
+    results = []
+
     for item in req.records:
         user = db.query(User).filter(
             (User.student_id == item.student_id) | (User.name.ilike(item.student_name))
@@ -1329,26 +1634,60 @@ def sync_offline_records(req: OfflineSyncRequest, db: Session = Depends(get_db))
             Attendance.date == item.date
         ).first()
 
-        if not existing:
-            att = Attendance(
-                user_id=user.id,
-                student_id=item.student_id,
-                student_name=item.student_name,
-                date=item.date,
-                time=item.time,
-                method="Offline Sync",
-                confidence=item.confidence,
-                liveness_verified=True,
-                status="Present"
-            )
-            db.add(att)
+        if existing:
+            results.append({"student_id": item.student_id, "status": "duplicate_skipped"})
+            continue
+
+        # Revalidate GPS for offline records on backend (Requirement 14)
+        gps_result = validate_student_gps(
+            lat=item.latitude,
+            lon=item.longitude,
+            accuracy=item.accuracy,
+            db=db,
+            require_gps=False
+        )
+
+        if not gps_result["valid"]:
+            # If GPS failed or outside radius, do NOT silently accept as present!
+            rec_status = "Pending Verification (GPS Flagged)"
+            geofence_status_str = f"Flagged: {gps_result['error']}"
+            flagged_count += 1
+        else:
+            rec_status = "Present"
+            geofence_status_str = gps_result.get("status", "Offline Sync Verified")
             synced_count += 1
+
+        att = Attendance(
+            user_id=user.id,
+            student_id=item.student_id,
+            student_name=item.student_name,
+            date=item.date,
+            time=item.time,
+            method="Offline Sync (GPS Revalidated)",
+            confidence=item.confidence,
+            liveness_verified=True,
+            status=rec_status,
+            latitude=item.latitude,
+            longitude=item.longitude,
+            accuracy=item.accuracy,
+            distance=gps_result.get("distance"),
+            geofence_status=geofence_status_str
+        )
+        db.add(att)
+        results.append({
+            "student_id": item.student_id,
+            "status": rec_status,
+            "geofence_status": geofence_status_str
+        })
             
     db.commit()
     return {
         "success": True,
         "synced_count": synced_count,
-        "message": f"Successfully synchronized {synced_count} offline attendance records!"
+        "flagged_count": flagged_count,
+        "total": len(req.records),
+        "results": results,
+        "message": f"Synchronized {synced_count} offline records ({flagged_count} flagged for manual GPS review)."
     }
 
 # Attendance Logs

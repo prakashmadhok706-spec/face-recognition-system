@@ -90,7 +90,6 @@ def verify_attendance_qr(qr_text: str, student_id: str):
     if session:
         if student_id in session["used_by"]:
             return {"valid": False, "error": "You have already scanned this QR session code."}
-        session["used_by"].add(student_id)
         
     return {
         "valid": True,
@@ -98,3 +97,9 @@ def verify_attendance_qr(qr_text: str, student_id: str):
         "session_name": session_name,
         "message": "QR Code Verified successfully"
     }
+
+def mark_qr_session_used(session_id: str, student_id: str):
+    """Marks a session as consumed for a given student only after all GPS and duplicate validations pass"""
+    session = ACTIVE_QR_SESSIONS.get(session_id)
+    if session:
+        session["used_by"].add(student_id)
