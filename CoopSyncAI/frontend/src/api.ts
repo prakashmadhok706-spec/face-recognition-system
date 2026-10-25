@@ -403,3 +403,34 @@ export async function registerUserApi(data: {
     return { success: false, message: `Network error: ${err.message}` };
   }
 }
+
+export async function getAIConfig() {
+  try {
+    const res = await fetch(`${API_BASE}/ai/config`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
+}
+
+export async function updateAIConfig(provider: string, apiKey: string) {
+  try {
+    const res = await fetch(`${API_BASE}/ai/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, api_key: apiKey }),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: `Network error: ${err.message}` };
+  }
+}
+
+export async function testAIChat(query: string, userId: number = 1) {
+  const res = await fetch(`${API_BASE}/ai/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, user_id: userId }),
+  });
+  return await res.json();
+}
