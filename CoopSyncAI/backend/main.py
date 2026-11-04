@@ -1447,19 +1447,13 @@ def recognize_face(req: FaceRecognizeRequest, db: Session = Depends(get_db)):
     ).first()
     
     if not user:
-        # Create user record dynamically if recognized from labels.csv
-        user = User(
-            student_id=student_id or "5025088",
-            name=student_name or "Recognized Student",
-            email=f"{student_id}@coopsync.edu",
-            password_hash="pass123",
-            role="student",
-            department=res.get("department", "CSE"),
-            semester=res.get("semester", "Sem 5")
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        return {
+            "success": False,
+            "error": f"Face recognized as '{student_name}' (ID: {student_id}), but this student is not registered in the system database. Please register the student in Student ERP first.",
+            "code": "STUDENT_NOT_REGISTERED",
+            "student_id": student_id,
+            "student_name": student_name
+        }
 
     today = datetime.now().strftime("%Y-%m-%d")
     time_now = datetime.now().strftime("%H:%M:%S")

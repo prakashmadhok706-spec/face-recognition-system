@@ -44,7 +44,7 @@ class Face_Detector:
         # ---------- STABILITY SETTINGS ----------
         self.last_ids = []
         self.REQUIRED_FRAMES = 7
-        self.CONF_THRESHOLD = 55
+        self.CONF_THRESHOLD = 65
         # --------------------------------------
 
         title_lbl = Label(
