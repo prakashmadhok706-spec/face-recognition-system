@@ -44,9 +44,12 @@ class User(Base):
     avatar = Column(String(255), default="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150")
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    attendances = relationship("Attendance", back_populates="user")
-    certificates = relationship("Certificate", back_populates="user")
-    applications = relationship("JobApplication", back_populates="user")
+    attendances = relationship("Attendance", back_populates="user", cascade="all, delete-orphan")
+    certificates = relationship("Certificate", back_populates="user", cascade="all, delete-orphan")
+    applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
+    assessments = relationship("StudentAssessment", back_populates="user", cascade="all, delete-orphan")
+    risk_predictions = relationship("StudentRiskPrediction", back_populates="user", cascade="all, delete-orphan")
+    interventions = relationship("StudentIntervention", back_populates="user", cascade="all, delete-orphan")
 
 class Attendance(Base):
     __tablename__ = "attendances"
@@ -131,6 +134,118 @@ class JobApplication(Base):
 
     job = relationship("Job", back_populates="applications")
     user = relationship("User", back_populates="applications")
+
+# ----------------- EARLY WARNING & RISK PREDICTION MODELS -----------------
+
+class StudentAssessment(Base):
+    __tablename__ = "student_assessments"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    student_id = Column(String(50), index=True)
+    subject = Column(String(100), nullable=False) # e.g. DSA, DBMS, OS, Networks
+    assessment_type = Column(String(50), default="Quiz") # Quiz, Midterm, Lab, Assignment, Final
+    score = Column(Float, nullable=False) # 0.0 - 100.0
+    max_score = Column(Float, default=100.0)
+    weight = Column(Float, default=1.0)
+    date = Column(String(30)) # YYYY-MM-DD
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="assessments")
+
+class StudentRiskPrediction(Base):
+    __tablename__ = "student_risk_predictions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    student_id = Column(String(50), index=True)
+    student_name = Column(String(100), nullable=False)
+    department = Column(String(100))
+    semester = Column(String(50))
+    
+    # Risk Metrics (0.0 - 100.0)
+    risk_score = Column(Float, nullable=False) # Overall risk score
+    risk_level = Column(String(30), nullable=False) # 'Low Risk', 'Medium Risk', 'High Risk'
+    academic_risk = Column(Float, default=0.0)
+    attendance_risk = Column(Float, default=0.0)
+    completion_risk = Column(Float, default=0.0)
+    skill_risk = Column(Float, default=0.0)
+    placement_risk = Column(Float, default=0.0)
+
+    # Underlying Factor Measurements
+    attendance_pct = Column(Float, default=0.0)
+    assessment_avg = Column(Float, default=0.0)
+    course_completion_pct = Column(Float, default=0.0)
+    learning_activity_score = Column(Float, default=0.0)
+    placement_readiness_score = Column(Float, default=0.0)
+    skills_count = Column(Integer, default=0)
+
+    # Explainability & Recommendations (JSON serialized)
+    primary_factors_json = Column(Text, default="[]") # List of key contributing factors
+    explainability_json = Column(Text, default="{}") # Breakdown of weights & impact points
+    recommendations_json = Column(Text, default="[]") # Prescriptive AI recommendations
+
+    model_version = Column(String(50), default="v1.0-rf")
+    is_preliminary = Column(Boolean, default=False)
+    predicted_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="risk_predictions")
+    interventions = relationship("StudentIntervention", back_populates="prediction")
+    feedback = relationship("PredictionFeedback", back_populates="prediction", cascade="all, delete-orphan")
+
+class MLModelMetadata(Base):
+    __tablename__ = "ml_model_metadata"
+    id = Column(Integer, primary_key=True, index=True)
+    version_name = Column(String(50), unique=True, index=True)
+    model_type = Column(String(50), default="RandomForestClassifier")
+    accuracy = Column(Float, default=0.0)
+    precision_score = Column(Float, default=0.0)
+    recall_score = Column(Float, default=0.0)
+    f1_score = Column(Float, default=0.0)
+    roc_auc = Column(Float, default=0.0)
+    cv_mean_f1 = Column(Float, default=0.0)
+    cv_std_f1 = Column(Float, default=0.0)
+    confusion_matrix_json = Column(Text, default="[]")
+    classification_report_json = Column(Text, default="{}")
+    feature_importances_json = Column(Text, default="{}")
+    training_samples_count = Column(Integer, default=0)
+    class_distribution_json = Column(Text, default="{}")
+    trained_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+class StudentIntervention(Base):
+    __tablename__ = "student_interventions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    student_id = Column(String(50), index=True)
+    student_name = Column(String(100), nullable=False)
+    prediction_id = Column(Integer, ForeignKey("student_risk_predictions.id", ondelete="SET NULL"), nullable=True)
+    
+    risk_level = Column(String(30), default="Medium Risk")
+    intervention_type = Column(String(50), default="Academic Counseling") # Remedial Class, Peer Mentoring, Attendance Warning, etc.
+    title = Column(String(150), nullable=False)
+    notes = Column(Text)
+    action_taken = Column(Text)
+    assigned_trainer_name = Column(String(100), default="Faculty Mentor")
+    status = Column(String(30), default="Pending") # Pending, In Progress, Completed, Escalated
+    follow_up_date = Column(String(30), nullable=True)
+    outcome_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="interventions")
+    prediction = relationship("StudentRiskPrediction", back_populates="interventions")
+
+class PredictionFeedback(Base):
+    __tablename__ = "prediction_feedback"
+    id = Column(Integer, primary_key=True, index=True)
+    prediction_id = Column(Integer, ForeignKey("student_risk_predictions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reviewer_name = Column(String(100), nullable=False)
+    reviewer_role = Column(String(30), default="trainer") # trainer, admin
+    actual_risk_status = Column(String(50), default="Accurate Risk") # 'Accurate Risk', 'False Alarm / Overestimated', 'Underestimated Risk'
+    comments = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    prediction = relationship("StudentRiskPrediction", back_populates="feedback")
 
 class InstitutionConfig(Base):
     __tablename__ = "institution_config"

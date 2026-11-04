@@ -4,6 +4,8 @@ import sys
 import os
 import test_face_enrollment_retrain
 import test_gps_attendance
+import unittest
+import test_student_risk_system
 
 def main():
     print(">>> Starting FastAPI backend server in background...")
@@ -19,6 +21,12 @@ def main():
         time.sleep(2)
         test_face_enrollment_retrain.test_all()
         test_gps_attendance.run_all()
+        print("\n>>> Running AI Student Performance Prediction & Early Warning Tests...")
+        suite = unittest.defaultTestLoader.loadTestsFromModule(test_student_risk_system)
+        runner = unittest.TextTestRunner(verbosity=2)
+        result = runner.run(suite)
+        if not result.wasSuccessful():
+            raise RuntimeError('Student Risk System tests failed!')
         print("\n>>> All verification tests finished successfully!")
     finally:
         print(">>> Terminating test backend server...")

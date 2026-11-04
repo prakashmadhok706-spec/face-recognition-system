@@ -11,6 +11,7 @@ import { AIChatModal } from './components/AIChatModal';
 import { ProgrammesView } from './components/ProgrammesView';
 import { LandingPage } from './components/LandingPage';
 import { AttendanceManagerView } from './components/AttendanceManagerView';
+import { EarlyWarningView } from './components/EarlyWarningView';
 import { fetchHealth, fetchStudents, fetchAdmins, syncOfflineAttendance } from './api';
 import { UserProfile } from './types';
 
@@ -193,8 +194,9 @@ export const App: React.FC = () => {
         margin: '0 auto',
         padding: '28px 24px 60px 24px'
       }}>
-        {activeTab === 'dashboard' && <AnalyticsView currentUser={currentUser} />}
+        {activeTab === 'dashboard' && <AnalyticsView currentUser={currentUser} setActiveTab={setActiveTab} />}
         {activeTab === 'attendance-records' && <AttendanceManagerView currentUser={currentUser} />}
+        {activeTab === 'early-warning' && <EarlyWarningView currentUser={currentUser} />}
         {activeTab === 'programmes' && <ProgrammesView currentUser={currentUser} />}
         {activeTab === 'face-attendance' && (
           <FaceAttendanceView

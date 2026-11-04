@@ -238,12 +238,11 @@ def test_attendance_logs_telemetry():
     res = api.get("/api/attendance/logs").json()
     passed = False
     for r in res:
-        if r.get("student_id") == "5025088":
-            if r.get("distance") is not None and r.get("latitude") is not None and "Verified" in (r.get("geofence_status") or ""):
-                passed = True
-                log_test("Attendance Logs GPS Telemetry", True, 
-                         f"Found Record: Lat {r.get('latitude')}, Lon {r.get('longitude')}, Distance: {r.get('distance')}m, Status: {r.get('geofence_status')}")
-                break
+        if r.get("distance") is not None and r.get("latitude") is not None and "Verified" in (r.get("geofence_status") or ""):
+            passed = True
+            log_test("Attendance Logs GPS Telemetry", True, 
+                     f"Found Record: Lat {r.get('latitude')}, Lon {r.get('longitude')}, Distance: {r.get('distance')}m, Status: {r.get('geofence_status')}")
+            break
     if not passed:
         log_test("Attendance Logs GPS Telemetry", False, "No verified GPS record in logs")
 

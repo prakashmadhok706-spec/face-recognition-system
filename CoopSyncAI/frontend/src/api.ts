@@ -434,3 +434,188 @@ export async function testAIChat(query: string, userId: number = 1) {
   });
   return await res.json();
 }
+
+// ==============================================================================
+// STUDENT PERFORMANCE PREDICTION & EARLY WARNING SYSTEM APIs
+// ==============================================================================
+
+export async function fetchRiskOverview() {
+  try {
+    const res = await fetch(`${API_BASE}/risk/overview`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchRiskStudents(filters?: {
+  risk_level?: string;
+  department?: string;
+  semester?: string;
+  search?: string;
+}) {
+  try {
+    const params = new URLSearchParams();
+    if (filters?.risk_level) params.append('risk_level', filters.risk_level);
+    if (filters?.department) params.append('department', filters.department);
+    if (filters?.semester) params.append('semester', filters.semester);
+    if (filters?.search) params.append('search', filters.search);
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/risk/students${qs}`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return [];
+  }
+}
+
+export async function fetchStudentRiskProfile(studentId: string) {
+  try {
+    const res = await fetch(`${API_BASE}/risk/student/${studentId}`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function triggerBatchRiskPrediction() {
+  try {
+    const res = await fetch(`${API_BASE}/risk/predict/all`, { method: 'POST' });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function triggerSingleRiskPrediction(studentId: string) {
+  try {
+    const res = await fetch(`${API_BASE}/risk/predict/student/${studentId}`, { method: 'POST' });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function fetchInterventions(filters?: { student_id?: string; status?: string }) {
+  try {
+    const params = new URLSearchParams();
+    if (filters?.student_id) params.append('student_id', filters.student_id);
+    if (filters?.status) params.append('status', filters.status);
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/risk/interventions${qs}`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return [];
+  }
+}
+
+export async function recordInterventionApi(data: {
+  student_id: string;
+  risk_level?: string;
+  intervention_type: string;
+  title: string;
+  notes?: string;
+  action_taken?: string;
+  assigned_trainer_name?: string;
+  follow_up_date?: string;
+  prediction_id?: number;
+  requester_role?: string;
+}) {
+  try {
+    const res = await fetch(`${API_BASE}/risk/interventions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function updateInterventionApi(
+  interventionId: number,
+  data: {
+    status?: string;
+    action_taken?: string;
+    outcome_notes?: string;
+    follow_up_date?: string;
+    requester_role?: string;
+  }
+) {
+  try {
+    const res = await fetch(`${API_BASE}/risk/interventions/${interventionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function submitPredictionFeedbackApi(data: {
+  prediction_id: number;
+  user_id: number;
+  reviewer_name: string;
+  reviewer_role?: string;
+  actual_risk_status: string;
+  comments?: string;
+}) {
+  try {
+    const res = await fetch(`${API_BASE}/risk/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function fetchModelMetricsApi() {
+  try {
+    const res = await fetch(`${API_BASE}/risk/model/metrics`);
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function retrainRiskModelApi(modelType: string = 'RandomForestClassifier', requesterRole: string = 'admin') {
+  try {
+    const res = await fetch(`${API_BASE}/risk/model/retrain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_type: modelType, requester_role: requesterRole }),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function addStudentAssessmentApi(data: {
+  student_id: string;
+  subject: string;
+  assessment_type: string;
+  score: number;
+  max_score?: number;
+  weight?: number;
+  date?: string;
+}) {
+  try {
+    const res = await fetch(`${API_BASE}/risk/assessments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return await safeJson(res);
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+

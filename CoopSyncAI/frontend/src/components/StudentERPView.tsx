@@ -70,6 +70,7 @@ import {
   updateStudentApi,
   resetStudentSamplesApi,
   fetchStudentSamplesCountApi,
+  fetchRiskStudents,
   triggerRetrainModelApi,
   fetchRetrainStatusApi
 } from '../api';
@@ -178,14 +179,24 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const [riskMap, setRiskMap] = useState<Record<string, string>>({});
+
   useEffect(() => {
     loadStudents();
   }, []);
 
   const loadStudents = async () => {
     try {
-      const res = await fetchStudents();
+      const [res, riskList] = await Promise.all([fetchStudents(), fetchRiskStudents()]);
       setStudents(res);
+      if (Array.isArray(riskList)) {
+        const rMap: Record<string, string> = {};
+        riskList.forEach((r: any) => {
+          if (r.student_id) rMap[r.student_id] = r.risk_level;
+          if (r.user_id) rMap[String(r.user_id)] = r.risk_level;
+        });
+        setRiskMap(rMap);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -586,8 +597,13 @@ export const StudentERPView: React.FC<StudentERPViewProps> = ({ currentUser }) =
       }}>
         {filteredStudents.map((student, idx) => (
           <div key={`${student.id}-${student.student_id || ''}-${idx}`} className="glass-card-interactive" style={{ padding: '22px', position: 'relative' }}>
-            {/* Status tag */}
-            <div style={{ position: 'absolute', top: '18px', right: '18px' }}>
+            {/* Status tag & Early Warning Risk Badge */}
+            <div style={{ position: 'absolute', top: '18px', right: '18px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {riskMap[student.student_id || String(student.id)] && (
+                <span className={`badge ${riskMap[student.student_id || String(student.id)] === 'High Risk' ? 'badge-rose' : (riskMap[student.student_id || String(student.id)] === 'Medium Risk' ? 'badge-gold' : 'badge-emerald')}`} style={{ fontSize: '0.62rem' }}>
+                  {riskMap[student.student_id || String(student.id)]}
+                </span>
+              )}
               {student.present_today ? (
                 <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>
                   <CheckCircle2 size={10} /> Present Today

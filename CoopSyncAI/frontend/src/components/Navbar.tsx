@@ -15,7 +15,8 @@ import {
   Calendar,
   Cpu,
   LogOut,
-  ClipboardCheck
+  ClipboardCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -49,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const adminNavItems = [
     { id: 'dashboard', label: 'Analytics', icon: LayoutDashboard },
     { id: 'attendance-records', label: 'Attendance Roster', icon: ClipboardCheck, highlight: true },
+    { id: 'early-warning', label: 'Early Warning AI', icon: AlertTriangle, highlight: true },
     { id: 'face-attendance', label: 'Face AI', icon: Camera },
     { id: 'qr-attendance', label: 'QR Attendance', icon: QrCode },
     { id: 'programmes', label: 'Programmes', icon: Calendar },
@@ -61,6 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const studentNavItems = [
     { id: 'dashboard', label: 'My Analytics & Graphs', icon: LayoutDashboard, highlight: true },
+    { id: 'early-warning', label: 'My Performance AI', icon: AlertTriangle, highlight: true },
     { id: 'courses', label: 'My Courses', icon: BookOpen },
     { id: 'face-attendance', label: 'Face AI Attendance', icon: Camera },
     { id: 'qr-attendance', label: 'QR Check-In', icon: QrCode },

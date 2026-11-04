@@ -3,6 +3,7 @@ import sys
 import subprocess
 import base64
 import csv
+import json
 import random
 import cv2
 import numpy as np
@@ -18,7 +19,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import math
 
-from database import init_db, get_db, User, Attendance, Course, Certificate, Job, JobApplication, InstitutionConfig
+from database import (
+    init_db, get_db, User, Attendance, Course, Certificate, Job, JobApplication, InstitutionConfig,
+    StudentAssessment, StudentRiskPrediction, MLModelMetadata, StudentIntervention, PredictionFeedback
+)
+from risk_engine import risk_engine
 from face_engine import face_engine
 from qr_engine import generate_dynamic_attendance_qr, verify_attendance_qr, mark_qr_session_used
 from certificate_engine import generate_pdf_certificate, CERTIFICATES_DIR
@@ -44,6 +49,13 @@ def seed_initial_data():
     init_db()
     from database import SessionLocal
     db = SessionLocal()
+    try:
+        risk_engine.seed_initial_assessments_if_empty(db)
+        # Pre-generate initial predictions if table is empty
+        if db.query(StudentRiskPrediction).count() == 0:
+            risk_engine.predict_and_save_all(db)
+    except Exception as e:
+        print(f"[Seed Warning] Risk engine initial seed: {e}")
     try:
         # ── Demo seed data disabled for fresh start ──
         # Change to `if True:` to re-enable demo courses, jobs, and attendance
@@ -2130,6 +2142,509 @@ def update_ai_config_endpoint(req: AIConfigRequest):
         model=req.model
     )
     return result
+
+
+
+# ==============================================================================
+# 10. AI-POWERED STUDENT PERFORMANCE PREDICTION & EARLY WARNING SYSTEM
+# ==============================================================================
+
+class RecordInterventionRequest(BaseModel):
+    student_id: str
+    risk_level: Optional[str] = "Medium Risk"
+    intervention_type: str = "Academic Counseling"
+    title: str
+    notes: Optional[str] = ""
+    action_taken: Optional[str] = ""
+    assigned_trainer_name: Optional[str] = "Faculty Mentor"
+    follow_up_date: Optional[str] = None
+    prediction_id: Optional[int] = None
+    requester_role: Optional[str] = "trainer"
+
+class UpdateInterventionRequest(BaseModel):
+    status: Optional[str] = None
+    action_taken: Optional[str] = None
+    outcome_notes: Optional[str] = None
+    follow_up_date: Optional[str] = None
+    requester_role: Optional[str] = "trainer"
+
+class PredictionFeedbackRequest(BaseModel):
+    prediction_id: int
+    user_id: int
+    reviewer_name: str
+    reviewer_role: Optional[str] = "trainer"
+    actual_risk_status: str
+    comments: Optional[str] = None
+
+class AddAssessmentRequest(BaseModel):
+    student_id: str
+    subject: str
+    assessment_type: str = "Quiz"
+    score: float
+    max_score: Optional[float] = 100.0
+    weight: Optional[float] = 1.0
+    date: Optional[str] = None
+
+class RetrainModelRequest(BaseModel):
+    model_type: Optional[str] = "RandomForestClassifier"
+    requester_role: Optional[str] = "admin"
+
+@app.get("/api/risk/overview")
+def get_risk_overview(db: Session = Depends(get_db)):
+    """Aggregated KPI cards, risk distribution, trends and active model metrics"""
+    return risk_engine.get_overview_analytics(db)
+
+@app.get("/api/risk/students")
+def get_risk_students(
+    risk_level: Optional[str] = None,
+    department: Optional[str] = None,
+    semester: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """List of all student early warning risk profiles with filtering"""
+    # Ensure predictions exist
+    if db.query(StudentRiskPrediction).count() == 0:
+        risk_engine.predict_and_save_all(db)
+
+    query = db.query(StudentRiskPrediction)
+
+    if risk_level and risk_level.lower() != "all":
+        query = query.filter(StudentRiskPrediction.risk_level.ilike(f"%{risk_level}%"))
+    if department and department.lower() != "all":
+        query = query.filter(StudentRiskPrediction.department.ilike(f"%{department}%"))
+    if semester and semester.lower() != "all":
+        query = query.filter(StudentRiskPrediction.semester.ilike(f"%{semester}%"))
+    if search:
+        s_term = f"%{search.strip()}%"
+        query = query.filter(
+            (StudentRiskPrediction.student_name.ilike(s_term)) |
+            (StudentRiskPrediction.student_id.ilike(s_term))
+        )
+
+    records = query.order_by(StudentRiskPrediction.risk_score.desc()).all()
+    results = []
+    for r in records:
+        # Check active intervention for student
+        latest_inv = db.query(StudentIntervention).filter(
+            StudentIntervention.student_id == r.student_id
+        ).order_by(StudentIntervention.id.desc()).first()
+
+        results.append({
+            "id": r.id,
+            "user_id": r.user_id,
+            "student_id": r.student_id,
+            "student_name": r.student_name,
+            "department": r.department,
+            "semester": r.semester,
+            "risk_score": r.risk_score,
+            "risk_level": r.risk_level,
+            "component_risks": {
+                "attendance": r.attendance_risk,
+                "academic": r.academic_risk,
+                "completion": r.completion_risk,
+                "skill": r.skill_risk,
+                "placement": r.placement_risk
+            },
+            "features": {
+                "attendance_pct": r.attendance_pct,
+                "assessment_avg": r.assessment_avg,
+                "course_completion_pct": r.course_completion_pct,
+                "learning_activity_score": r.learning_activity_score,
+                "placement_readiness": r.placement_readiness_score,
+                "skills_count": r.skills_count
+            },
+            "primary_factors": json.loads(r.primary_factors_json or "[]"),
+            "explainability": json.loads(r.explainability_json or "{}"),
+            "recommendations": json.loads(r.recommendations_json or "[]"),
+            "model_version": r.model_version,
+            "is_preliminary": r.is_preliminary,
+            "predicted_at": r.predicted_at.strftime("%Y-%m-%d %H:%M:%S") if r.predicted_at else None,
+            "latest_intervention": {
+                "id": latest_inv.id,
+                "type": latest_inv.intervention_type,
+                "status": latest_inv.status,
+                "assigned_trainer": latest_inv.assigned_trainer_name
+            } if latest_inv else None
+        })
+
+    return results
+
+@app.get("/api/risk/student/{student_id}")
+def get_student_risk_profile(student_id: str, db: Session = Depends(get_db)):
+    """Deep-dive explainable risk report for an individual student"""
+    user = db.query(User).filter(
+        (User.student_id == student_id) | (User.id == (int(student_id) if student_id.isdigit() else -1))
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    pred_record = db.query(StudentRiskPrediction).filter(
+        StudentRiskPrediction.user_id == user.id
+    ).first()
+
+    if not pred_record:
+        # Generate on the fly
+        risk_engine.seed_initial_assessments_if_empty(db)
+        live_pred = risk_engine.compute_student_risk(user, db)
+        pred_record = StudentRiskPrediction(
+            user_id=user.id,
+            student_id=user.student_id or str(user.id),
+            student_name=user.name,
+            department=user.department or "General",
+            semester=user.semester or "Sem 1",
+            risk_score=live_pred["risk_score"],
+            risk_level=live_pred["risk_level"],
+            academic_risk=live_pred["component_risks"]["academic"],
+            attendance_risk=live_pred["component_risks"]["attendance"],
+            completion_risk=live_pred["component_risks"]["completion"],
+            skill_risk=live_pred["component_risks"]["skill"],
+            placement_risk=live_pred["component_risks"]["placement"],
+            attendance_pct=live_pred["features"]["attendance_pct"],
+            assessment_avg=live_pred["features"]["assessment_avg"],
+            course_completion_pct=live_pred["features"]["course_completion_pct"],
+            learning_activity_score=live_pred["features"]["learning_activity_score"],
+            placement_readiness_score=live_pred["features"]["placement_readiness"],
+            skills_count=live_pred["features"]["skills_count"],
+            primary_factors_json=json.dumps(live_pred["primary_factors"]),
+            explainability_json=json.dumps(live_pred["explainability"]),
+            recommendations_json=json.dumps(live_pred["recommendations"]),
+            model_version=live_pred["model_version"],
+            is_preliminary=live_pred["is_preliminary"],
+            predicted_at=datetime.utcnow()
+        )
+        db.add(pred_record)
+        db.commit()
+        db.refresh(pred_record)
+
+    # Assessments list
+    assessments = db.query(StudentAssessment).filter(
+        StudentAssessment.user_id == user.id
+    ).order_by(StudentAssessment.date.desc()).all()
+    ass_data = [
+        {
+            "id": a.id,
+            "subject": a.subject,
+            "type": a.assessment_type,
+            "score": a.score,
+            "max_score": a.max_score,
+            "weight": a.weight,
+            "date": a.date
+        }
+        for a in assessments
+    ]
+
+    # Interventions list
+    interventions = db.query(StudentIntervention).filter(
+        StudentIntervention.user_id == user.id
+    ).order_by(StudentIntervention.created_at.desc()).all()
+    inv_data = [
+        {
+            "id": i.id,
+            "type": i.intervention_type,
+            "title": i.title,
+            "notes": i.notes,
+            "action_taken": i.action_taken,
+            "assigned_trainer": i.assigned_trainer_name,
+            "status": i.status,
+            "follow_up_date": i.follow_up_date,
+            "outcome_notes": i.outcome_notes,
+            "created_at": i.created_at.strftime("%Y-%m-%d %H:%M") if i.created_at else None
+        }
+        for i in interventions
+    ]
+
+    return {
+        "success": True,
+        "student": {
+            "id": user.id,
+            "student_id": user.student_id,
+            "name": user.name,
+            "email": user.email,
+            "department": user.department,
+            "semester": user.semester,
+            "skills": user.skills,
+            "avatar": user.avatar
+        },
+        "risk_profile": {
+            "risk_score": pred_record.risk_score,
+            "risk_level": pred_record.risk_level,
+            "component_risks": {
+                "attendance": pred_record.attendance_risk,
+                "academic": pred_record.academic_risk,
+                "completion": pred_record.completion_risk,
+                "skill": pred_record.skill_risk,
+                "placement": pred_record.placement_risk
+            },
+            "features": {
+                "attendance_pct": pred_record.attendance_pct,
+                "assessment_avg": pred_record.assessment_avg,
+                "course_completion_pct": pred_record.course_completion_pct,
+                "learning_activity_score": pred_record.learning_activity_score,
+                "placement_readiness": pred_record.placement_readiness_score,
+                "skills_count": pred_record.skills_count
+            },
+            "primary_factors": json.loads(pred_record.primary_factors_json or "[]"),
+            "explainability": json.loads(pred_record.explainability_json or "{}"),
+            "recommendations": json.loads(pred_record.recommendations_json or "[]"),
+            "model_version": pred_record.model_version,
+            "is_preliminary": pred_record.is_preliminary,
+            "predicted_at": pred_record.predicted_at.strftime("%Y-%m-%d %H:%M:%S") if pred_record.predicted_at else None
+        },
+        "assessments": ass_data,
+        "interventions": inv_data
+    }
+
+@app.post("/api/risk/predict/all")
+def trigger_all_risk_predictions(db: Session = Depends(get_db)):
+    """Run batch prediction engine across all registered students"""
+    results = risk_engine.predict_and_save_all(db)
+    return {
+        "success": True,
+        "message": f"Successfully updated risk predictions for {len(results)} students.",
+        "count": len(results)
+    }
+
+@app.post("/api/risk/predict/student/{student_id}")
+def trigger_single_risk_prediction(student_id: str, db: Session = Depends(get_db)):
+    """Trigger single-student risk recalculation on demand"""
+    user = db.query(User).filter(
+        (User.student_id == student_id) | (User.id == (int(student_id) if student_id.isdigit() else -1))
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    pred = risk_engine.compute_student_risk(user, db)
+    rec = db.query(StudentRiskPrediction).filter(StudentRiskPrediction.user_id == user.id).first()
+    if not rec:
+        rec = StudentRiskPrediction(user_id=user.id)
+        db.add(rec)
+
+    rec.student_id = user.student_id or str(user.id)
+    rec.student_name = user.name
+    rec.department = user.department or "General"
+    rec.semester = user.semester or "Sem 1"
+    rec.risk_score = pred["risk_score"]
+    rec.risk_level = pred["risk_level"]
+    rec.academic_risk = pred["component_risks"]["academic"]
+    rec.attendance_risk = pred["component_risks"]["attendance"]
+    rec.completion_risk = pred["component_risks"]["completion"]
+    rec.skill_risk = pred["component_risks"]["skill"]
+    rec.placement_risk = pred["component_risks"]["placement"]
+    rec.attendance_pct = pred["features"]["attendance_pct"]
+    rec.assessment_avg = pred["features"]["assessment_avg"]
+    rec.course_completion_pct = pred["features"]["course_completion_pct"]
+    rec.learning_activity_score = pred["features"]["learning_activity_score"]
+    rec.placement_readiness_score = pred["features"]["placement_readiness"]
+    rec.skills_count = pred["features"]["skills_count"]
+    rec.primary_factors_json = json.dumps(pred["primary_factors"])
+    rec.explainability_json = json.dumps(pred["explainability"])
+    rec.recommendations_json = json.dumps(pred["recommendations"])
+    rec.model_version = pred["model_version"]
+    rec.is_preliminary = pred["is_preliminary"]
+    rec.predicted_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(rec)
+    return {"success": True, "prediction": pred}
+
+@app.get("/api/risk/interventions")
+def get_interventions(
+    student_id: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """List recorded interventions with status filter"""
+    q = db.query(StudentIntervention)
+    if student_id:
+        q = q.filter(StudentIntervention.student_id == student_id)
+    if status and status.lower() != "all":
+        q = q.filter(StudentIntervention.status == status)
+
+    records = q.order_by(StudentIntervention.created_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "student_id": r.student_id,
+            "student_name": r.student_name,
+            "risk_level": r.risk_level,
+            "type": r.intervention_type,
+            "title": r.title,
+            "notes": r.notes,
+            "action_taken": r.action_taken,
+            "assigned_trainer": r.assigned_trainer_name,
+            "status": r.status,
+            "follow_up_date": r.follow_up_date,
+            "outcome_notes": r.outcome_notes,
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else None,
+            "updated_at": r.updated_at.strftime("%Y-%m-%d %H:%M") if r.updated_at else None
+        }
+        for r in records
+    ]
+
+@app.post("/api/risk/interventions")
+def create_intervention(req: RecordInterventionRequest, db: Session = Depends(get_db)):
+    """Record a targeted faculty/trainer intervention action"""
+    user = db.query(User).filter(
+        (User.student_id == req.student_id) | (User.id == (int(req.student_id) if req.student_id.isdigit() else -1))
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    intervention = StudentIntervention(
+        user_id=user.id,
+        student_id=user.student_id or str(user.id),
+        student_name=user.name,
+        prediction_id=req.prediction_id,
+        risk_level=req.risk_level or "Medium Risk",
+        intervention_type=req.intervention_type,
+        title=req.title,
+        notes=req.notes,
+        action_taken=req.action_taken,
+        assigned_trainer_name=req.assigned_trainer_name or "Faculty Mentor",
+        status="Pending",
+        follow_up_date=req.follow_up_date
+    )
+    db.add(intervention)
+    db.commit()
+    db.refresh(intervention)
+
+    return {
+        "success": True,
+        "message": f"Intervention '{req.title}' successfully recorded for {user.name}.",
+        "intervention_id": intervention.id
+    }
+
+@app.put("/api/risk/interventions/{intervention_id}")
+def update_intervention(intervention_id: int, req: UpdateInterventionRequest, db: Session = Depends(get_db)):
+    """Update status, action or follow-up outcome for an intervention"""
+    inv = db.query(StudentIntervention).filter(StudentIntervention.id == intervention_id).first()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Intervention not found")
+
+    if req.status:
+        inv.status = req.status
+    if req.action_taken is not None:
+        inv.action_taken = req.action_taken
+    if req.outcome_notes is not None:
+        inv.outcome_notes = req.outcome_notes
+    if req.follow_up_date is not None:
+        inv.follow_up_date = req.follow_up_date
+
+    inv.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(inv)
+
+    return {
+        "success": True,
+        "message": f"Intervention #{inv.id} updated successfully.",
+        "status": inv.status
+    }
+
+@app.post("/api/risk/feedback")
+def submit_prediction_feedback(req: PredictionFeedbackRequest, db: Session = Depends(get_db)):
+    """Record educator feedback on prediction quality (True Positive / False Alarm)"""
+    pred = db.query(StudentRiskPrediction).filter(StudentRiskPrediction.id == req.prediction_id).first()
+    if not pred:
+        raise HTTPException(status_code=404, detail="Risk prediction record not found")
+
+    fb = PredictionFeedback(
+        prediction_id=pred.id,
+        user_id=req.user_id,
+        reviewer_name=req.reviewer_name,
+        reviewer_role=req.reviewer_role or "trainer",
+        actual_risk_status=req.actual_risk_status,
+        comments=req.comments
+    )
+    db.add(fb)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Thank you! Prediction feedback logged for model continuous improvement."
+    }
+
+@app.get("/api/risk/model/metrics")
+def get_model_metrics(db: Session = Depends(get_db)):
+    """Return transparent ML evaluation metrics, cross-validation scores and confusion matrix"""
+    active = db.query(MLModelMetadata).filter(MLModelMetadata.is_active == True).order_by(MLModelMetadata.id.desc()).first()
+    if not active:
+        # Trigger training to populate real metrics
+        risk_engine.train_model(db)
+        active = db.query(MLModelMetadata).filter(MLModelMetadata.is_active == True).order_by(MLModelMetadata.id.desc()).first()
+
+    if not active:
+        return {
+            "success": False,
+            "message": "No ML model trained yet. Using calibrated baseline rule engine.",
+            "is_preliminary": True
+        }
+
+    return {
+        "success": True,
+        "model_metadata": {
+            "version_name": active.version_name,
+            "model_type": active.model_type,
+            "accuracy": active.accuracy,
+            "precision_score": active.precision_score,
+            "recall_score": active.recall_score,
+            "f1_score": active.f1_score,
+            "roc_auc": active.roc_auc,
+            "cv_mean_f1": active.cv_mean_f1,
+            "cv_std_f1": active.cv_std_f1,
+            "confusion_matrix": json.loads(active.confusion_matrix_json or "[]"),
+            "classification_report": json.loads(active.classification_report_json or "{}"),
+            "feature_importances": json.loads(active.feature_importances_json or "{}"),
+            "training_samples_count": active.training_samples_count,
+            "class_distribution": json.loads(active.class_distribution_json or "{}"),
+            "trained_at": active.trained_at.strftime("%Y-%m-%d %H:%M:%S") if active.trained_at else None
+        }
+    }
+
+@app.post("/api/risk/model/retrain")
+def retrain_model_endpoint(req: RetrainModelRequest, db: Session = Depends(get_db)):
+    """Admin endpoint to retrain and re-evaluate the risk prediction classifier"""
+    allowed_roles = {"admin", "trainer", "institution_admin", "ncct_admin"}
+    if req.requester_role and req.requester_role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Unauthorized: Only admins and trainers can retrain AI models.")
+
+    res = risk_engine.train_model(db, model_type=req.model_type or "RandomForestClassifier")
+    if res.get("success"):
+        # Recompute predictions with updated model
+        risk_engine.predict_and_save_all(db)
+    return res
+
+@app.post("/api/risk/assessments")
+def add_student_assessment(req: AddAssessmentRequest, db: Session = Depends(get_db)):
+    """Record assessment score for a student and update risk profile"""
+    user = db.query(User).filter(
+        (User.student_id == req.student_id) | (User.id == (int(req.student_id) if req.student_id.isdigit() else -1))
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    date_str = req.date or datetime.now().strftime("%Y-%m-%d")
+    assessment = StudentAssessment(
+        user_id=user.id,
+        student_id=user.student_id or str(user.id),
+        subject=req.subject,
+        assessment_type=req.assessment_type,
+        score=req.score,
+        max_score=req.max_score or 100.0,
+        weight=req.weight or 1.0,
+        date=date_str
+    )
+    db.add(assessment)
+    db.commit()
+
+    # Refresh student risk prediction
+    risk_engine.compute_student_risk(user, db)
+
+    return {
+        "success": True,
+        "message": f"Assessment for {user.name} ({req.subject}) recorded successfully."
+    }
 
 if __name__ == "__main__":
     import uvicorn

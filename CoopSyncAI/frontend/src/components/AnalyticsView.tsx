@@ -49,9 +49,10 @@ ChartJS.register(
 
 interface AnalyticsViewProps {
   currentUser?: UserProfile;
+  setActiveTab?: (tab: string) => void;
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ currentUser }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ currentUser, setActiveTab }) => {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [studentLogs, setStudentLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -679,6 +680,54 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ currentUser }) => 
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Early Warning AI Quick Diagnostic Banner */}
+      <div className="glass-panel" style={{ 
+        padding: '20px 24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px',
+        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.05) 50%, rgba(99, 102, 241, 0.08) 100%)',
+        border: '1px solid rgba(239, 68, 68, 0.25)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ 
+            width: '46px',
+            height: '46px',
+            borderRadius: '12px',
+            background: 'rgba(239, 68, 68, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ef4444'
+          }}>
+            <ShieldAlert size={26} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>
+                AI Student Early Warning & Performance Prediction Active
+              </h4>
+              <span className="badge badge-rose">ML Prediction Pipeline</span>
+            </div>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+              Real-time academic failure and debarment risk monitoring, multi-dimensional assessment tracking, and prescriptive faculty intervention management.
+            </p>
+          </div>
+        </div>
+
+        {setActiveTab && (
+          <button
+            onClick={() => setActiveTab('early-warning')}
+            className="gradient-btn gradient-btn-danger"
+            style={{ padding: '8px 18px', fontSize: '0.85rem' }}
+          >
+            Open Early Warning Dashboard →
+          </button>
+        )}
       </div>
 
       {/* Charts 2-Column Section */}

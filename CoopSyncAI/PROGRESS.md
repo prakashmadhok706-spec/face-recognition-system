@@ -24,6 +24,7 @@
 | **AI Chatbot & Semantic Advisor** | ✅ Completed | 100% |
 | **Offline Attendance Synchronization** | ✅ Completed | 100% |
 | **In-Browser Dataset Enrollment & Web Retraining** | ✅ Completed | 100% |
+| **AI Performance Prediction & Early Warning System** | ✅ Completed | 100% |
 | **Multi-Role RBAC (NCCT, Admin, Trainer, Student, Recruiter)** | ✅ Completed | 100% |
 | **Production Containerization (Docker Compose)** | ✅ Completed | 100% |
 | **Live Multi-Cloud Deployment (Render + Vercel)** | 🟡 Ready for Deployment | 90% |
@@ -42,6 +43,17 @@
 - [x] **Desktop OpenCV Bridge:** Built `/api/attendance/launch-opencv-camera` to launch native Python Tkinter detector (`facedetector.py`) directly from the web browser.
 - [x] **Image Upload Fallback:** Support for testing and recognizing uploaded face images.
 - [x] **Real-Time Attendance Roster:** Auto-refreshing roster displaying verified check-ins with timestamps and confidence scores.
+
+### 0. 🧠 AI Student Performance Prediction & Early Warning System (SIH Key Innovation)
+- [x] **Multi-Dimensional Risk Pipeline:** Evaluates 5 orthogonal criteria: biometric attendance rate (38%), modular assessment average (32%), LMS course completion (12%), technical skill breadth (9%), and cooperative placement readiness (9%).
+- [x] **Calibrated Continuous Risk Score (0-100):** Classifies students into Low Risk (0-24.9), Medium Risk (25-49.9), and High Risk (50-100) adhering to UGC/AICTE statutory debarment rules (<75% attendance).
+- [x] **Machine Learning Classifier:** Trained Random Forest & Logistic Regression models evaluated with Stratified 5-Fold Cross-Validation, Weighted Precision/Recall/F1, and Multiclass Confusion Matrix.
+- [x] **Local Explainability Panel:** Dissects every prediction into exact observed measurements vs target benchmarks and risk points added/subtracted.
+- [x] **Prescriptive AI Interventions:** Automatically generates tailored remedial actions (e.g. 1-on-1 counseling, TA problem sets, peer mentor matching).
+- [x] **Faculty Intervention Tracking & Lifecycle:** Complete tracker for logging actions, assigning mentors, setting follow-up dates, and updating status (Pending -> In Progress -> Completed -> Escalated).
+- [x] **Educator Model Feedback Loop:** Faculty feedback mechanism for flagging True Positives vs False Alarms to drive continuous model refinement.
+- [x] **Student-Level Diagnostic Portal:** Dedicated personal view for students showing risk status, debarment warnings, strengths, growth areas, and assigned support programs.
+- [x] **Model Telemetry & Audit Drawer:** Complete transparency dashboard displaying real-time confusion matrix, feature importance weights, and live model retraining.
 
 ### 2. 📱 Dynamic 30-Second QR Attendance System
 - [x] **Dynamic Session Generation:** Server-side QR generation with rotating cryptographic SHA-256 HMAC salt.
@@ -145,6 +157,8 @@
 | **Face Recognition Engine** | [`CoopSyncAI/backend/face_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/face_engine.py) |
 | **Dynamic QR Engine** | [`CoopSyncAI/backend/qr_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/qr_engine.py) |
 | **PDF Certificate Generator** | [`CoopSyncAI/backend/certificate_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/certificate_engine.py) |
+| **Early Warning & Risk AI Engine** | [`CoopSyncAI/backend/risk_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/risk_engine.py) |
+| **Early Warning UI Dashboard** | [`CoopSyncAI/frontend/src/components/EarlyWarningView.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/components/EarlyWarningView.tsx) |
 | **AI Advisor Engine** | [`CoopSyncAI/backend/ai_engine.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/ai_engine.py) |
 | **Database Models** | [`CoopSyncAI/backend/database.py`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/backend/database.py) |
 | **Main React Application** | [`CoopSyncAI/frontend/src/App.tsx`](file:///c:/Users/priya/OneDrive/Documents/GitHub/face-recognition-system/CoopSyncAI/frontend/src/App.tsx) |
