@@ -1050,7 +1050,7 @@ def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
             "error": f"Sample rejected: Too dark ({brightness:.1f}/255). Please ensure adequate face lighting.",
             "quality": {"brightness": brightness, "sharpness": 0, "faces_detected": 0}
         }
-    if brightness > 245.0:
+    if brightness >= 240.0:
         return {
             "success": False,
             "quality_passed": False,
