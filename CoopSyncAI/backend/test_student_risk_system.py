@@ -24,6 +24,7 @@ from database import (
 from risk_engine import risk_engine, StudentRiskEngine, FEATURE_NAMES
 from main import app
 from fastapi.testclient import TestClient
+from auth.jwt_handler import create_access_token
 
 class TestStudentRiskSystem(unittest.TestCase):
     @classmethod
@@ -31,6 +32,13 @@ class TestStudentRiskSystem(unittest.TestCase):
         init_db()
         cls.db = SessionLocal()
         cls.client = TestClient(app)
+        admin_u = cls.db.query(User).filter(User.role.in_(["admin", "ncct_admin"])).first()
+        token = create_access_token(
+            user_id=admin_u.id if admin_u else 1,
+            role="admin",
+            email=admin_u.email if admin_u else "admin@coopsync.edu"
+        )
+        cls.headers = {"Authorization": f"Bearer {token}"}
 
     @classmethod
     def tearDownClass(cls):
@@ -117,7 +125,7 @@ class TestStudentRiskSystem(unittest.TestCase):
     def test_05_api_endpoints(self):
         """Verify all FastAPI risk endpoints respond with 200 OK and valid schemas"""
         # 1. Overview
-        r1 = self.client.get("/api/risk/overview")
+        r1 = self.client.get("/api/risk/overview", headers=self.headers)
         self.assertEqual(r1.status_code, 200)
         d1 = r1.json()
         self.assertIn("total_students", d1)
@@ -125,7 +133,7 @@ class TestStudentRiskSystem(unittest.TestCase):
         self.assertIn("department_distribution", d1)
 
         # 2. Students list
-        r2 = self.client.get("/api/risk/students")
+        r2 = self.client.get("/api/risk/students", headers=self.headers)
         self.assertEqual(r2.status_code, 200)
         st_list = r2.json()
         self.assertIsInstance(st_list, list)
@@ -133,7 +141,7 @@ class TestStudentRiskSystem(unittest.TestCase):
 
         # 3. Single student detail
         test_sid = st_list[0]["student_id"]
-        r3 = self.client.get(f"/api/risk/student/{test_sid}")
+        r3 = self.client.get(f"/api/risk/student/{test_sid}", headers=self.headers)
         self.assertEqual(r3.status_code, 200)
         d3 = r3.json()
         self.assertTrue(d3["success"])
@@ -141,7 +149,7 @@ class TestStudentRiskSystem(unittest.TestCase):
         self.assertIn("assessments", d3)
 
         # 4. Interventions lifecycle: Create -> Get -> Update
-        r4 = self.client.post("/api/risk/interventions", json={
+        r4 = self.client.post("/api/risk/interventions", headers=self.headers, json={
             "student_id": test_sid,
             "risk_level": "High Risk",
             "intervention_type": "Remedial Class",
@@ -154,7 +162,7 @@ class TestStudentRiskSystem(unittest.TestCase):
         self.assertEqual(r4.status_code, 200)
         inv_id = r4.json()["intervention_id"]
 
-        r5 = self.client.put(f"/api/risk/interventions/{inv_id}", json={
+        r5 = self.client.put(f"/api/risk/interventions/{inv_id}", headers=self.headers, json={
             "status": "Completed",
             "outcome_notes": "Student scored 88% on make-up quiz."
         })
@@ -169,7 +177,7 @@ class TestStudentRiskSystem(unittest.TestCase):
         self.assertIn("confusion_matrix", d6["model_metadata"])
 
         # 6. Educator Feedback
-        r7 = self.client.post("/api/risk/feedback", json={
+        r7 = self.client.post("/api/risk/feedback", headers=self.headers, json={
             "prediction_id": st_list[0]["id"],
             "user_id": st_list[0]["user_id"],
             "reviewer_name": "Prof. Rajesh Sharma",

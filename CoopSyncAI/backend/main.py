@@ -28,6 +28,11 @@ from face_engine import face_engine
 from qr_engine import generate_dynamic_attendance_qr, verify_attendance_qr, mark_qr_session_used
 from certificate_engine import generate_pdf_certificate, CERTIFICATES_DIR
 from ai_engine import calculate_skill_match, get_ai_chat_response, get_ai_config, update_ai_config
+from auth.security import hash_password, verify_and_migrate_password
+from auth.jwt_handler import create_access_token, create_refresh_token, decode_token, revoke_token
+from auth.dependencies import get_current_user as auth_get_current_user, get_optional_current_user
+from auth.permissions import require_role, require_any_role, verify_ownership_or_roles
+
 
 app = FastAPI(
     title="CoopSync AI - Cooperative ERP & Employment Ecosystem",
@@ -35,13 +40,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for React Vite frontend
+# Secure CORS: read explicit allowed origins from environment (no wildcard with credentials)
+_ALLOWED_ORIGINS_RAW = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
+)
+ALLOWED_ORIGINS = [o.strip() for o in _ALLOWED_ORIGINS_RAW.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Seed database on startup
@@ -286,6 +297,9 @@ init_db()
 # seed_initial_data()  # Uncomment this line to restore demo data
 
 # ----------------- SCHEMAS -----------------
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
 class LoginRequest(BaseModel):
     email_or_id: str
     password: str
@@ -560,7 +574,7 @@ def get_institution_config(db: Session = Depends(get_db)):
     }
 
 @app.put("/api/institution/config")
-def update_institution_config(req: InstitutionConfigUpdate, db: Session = Depends(get_db)):
+def update_institution_config(req: InstitutionConfigUpdate, current_user: User = Depends(require_role("admin", "ncct_admin")), db: Session = Depends(get_db)):
     """Admin endpoint to configure campus coordinates and allowed attendance radius"""
     allowed_roles = {"admin", "ncct_admin", "institution_admin", "trainer"}
     if req.requester_role and req.requester_role not in allowed_roles:
@@ -640,14 +654,33 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             detail="Account not found. For students, please ensure your administrator has registered your Student ID."
         )
 
-    # Password validation
+    # Secure Password validation via bcrypt with transparent migration (Task 1)
+    # Hardcoded bypass pass123 is strictly removed
     req_pass = req.password.strip() if req.password else ""
-    if user.password_hash:
-        if user.password_hash != req_pass and user.password_hash != "pass123":
-            raise HTTPException(status_code=401, detail="Incorrect password. Please verify your credentials.")
+    is_valid, new_hash = verify_and_migrate_password(req_pass, user.password_hash)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Incorrect password. Please verify your credentials.")
+
+    if new_hash:
+        user.password_hash = new_hash
+        db.commit()
+
+    # Generate cryptographically signed JWT access and refresh tokens (Task 2)
+    access_token = create_access_token(
+        user_id=user.id,
+        role=user.role,
+        email=user.email,
+        student_id=user.student_id
+    )
+    refresh_token = create_refresh_token(
+        user_id=user.id,
+        role=user.role,
+        email=user.email
+    )
 
     return {
-        "access_token": f"mock_jwt_token_{user.id}_{user.role}",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": {
             "id": user.id,
@@ -663,6 +696,33 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             "avatar": user.avatar
         }
     }
+
+@app.post("/api/auth/refresh")
+def refresh_token_endpoint(req: RefreshTokenRequest, db: Session = Depends(get_db)):
+    try:
+        payload = decode_token(req.refresh_token.strip(), expected_type="refresh")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid or expired refresh token: {e}")
+    
+    user_id = payload.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User account no longer exists.")
+
+    new_access_token = create_access_token(
+        user_id=user.id,
+        role=user.role,
+        email=user.email,
+        student_id=user.student_id
+    )
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
+
+@app.post("/api/auth/logout")
+def logout(current_user: User = Depends(auth_get_current_user)):
+    return {"success": True, "message": "Successfully logged out."}
 
 # 1b. Registration (Admin & Trainer only)
 class RegisterRequest(BaseModel):
@@ -719,7 +779,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         roll_number=req.roll_number.strip() if req.roll_number else "",
         name=req.name.strip(),
         email=req.email.strip().lower(),
-        password_hash=req.password,   # plain for now; hash in production
+        password_hash=hash_password(req.password),   # securely hashed with bcrypt
         role=req.role,
         department=req.department or "Computer Science & Engineering",
         semester=req.semester or "Sem 1",
@@ -750,14 +810,23 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     }
 
 @app.get("/api/users/me")
-def get_current_user(user_id: int = 1, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        user = db.query(User).first()
-    return user
+def get_my_profile(current_user: User = Depends(auth_get_current_user)):
+    return {
+        "id": current_user.id,
+        "student_id": current_user.student_id,
+        "roll_number": current_user.roll_number,
+        "name": current_user.name,
+        "email": current_user.email,
+        "role": current_user.role,
+        "department": current_user.department,
+        "semester": current_user.semester,
+        "degree": current_user.degree,
+        "skills": current_user.skills,
+        "avatar": current_user.avatar
+    }
 
 @app.get("/api/students")
-def get_students(db: Session = Depends(get_db)):
+def get_students(current_user: User = Depends(auth_get_current_user), db: Session = Depends(get_db)):
     students = db.query(User).filter(User.role == "student").all()
     # Calculate attendance % for each
     today = datetime.now().strftime("%Y-%m-%d")
@@ -785,7 +854,7 @@ def get_students(db: Session = Depends(get_db)):
     return result
 
 @app.get("/api/admins")
-def get_admins(db: Session = Depends(get_db)):
+def get_admins(current_user: User = Depends(require_role("admin", "ncct_admin")), db: Session = Depends(get_db)):
     """Return only institutional and staff admin profiles (Admin Portal DB)"""
     admins = db.query(User).filter(User.role != "student").all()
     return [
@@ -806,7 +875,11 @@ def get_admins(db: Session = Depends(get_db)):
     ]
 
 @app.post("/api/students/add")
-def add_student(req: AddStudentRequest, db: Session = Depends(get_db)):
+def add_student(
+    req: AddStudentRequest, 
+    current_user: User = Depends(require_role("admin", "ncct_admin")), 
+    db: Session = Depends(get_db)
+):
     """Register a new student into the SQLite DB and students.csv"""
     sid = req.id.strip()
     # Check for duplicate
@@ -824,7 +897,7 @@ def add_student(req: AddStudentRequest, db: Session = Depends(get_db)):
         roll_number=req.roll or sid,
         name=req.name.strip().title(),
         email=email,
-        password_hash=req.password or "pass123",
+        password_hash=hash_password(req.password or "pass123"),
         role="student",
         department=req.dept or "Computer Science & Engineering",
         semester=req.sem or "Sem 5",
@@ -941,7 +1014,7 @@ def update_student(student_id: str, req: UpdateStudentRequest, db: Session = Dep
     return {"success": True, "message": f"✅ Student {user.name} ({sid}) updated successfully!"}
 
 @app.delete("/api/students/{student_id}")
-def delete_student(student_id: str, db: Session = Depends(get_db)):
+def delete_student(student_id: str, current_user: User = Depends(require_role("admin", "ncct_admin")), db: Session = Depends(get_db)):
     """Delete a student from DB, students.csv, labels.csv, dataset folder, and face_engine"""
     import shutil
     import glob
@@ -1022,15 +1095,13 @@ def delete_student(student_id: str, db: Session = Depends(get_db)):
     }
 
 @app.post("/api/students/capture-sample")
-def capture_sample(req: CaptureSampleRequest, db: Session = Depends(get_db)):
+def capture_sample(
+    req: CaptureSampleRequest, 
+    current_user: User = Depends(require_role("trainer", "admin", "ncct_admin")), 
+    db: Session = Depends(get_db)
+):
     """Save a face photo sample to dataset/<student_id>/ for LBPH training with strict biometric quality validation"""
-    # 1. Authorization: Only trainer or admin can enroll or capture samples
-    role = (req.requester_role or "admin").strip().lower()
-    if role == "student":
-        return {
-            "success": False,
-            "error": "Unauthorized: Students cannot enroll or update biometric face data. Contact an institution admin or trainer."
-        }
+    # Server-side RBAC: Only trainer or admin can enroll or capture samples (Task 4)
 
     sid = req.student_id.strip()
     if not sid:
@@ -1587,12 +1658,12 @@ def verify_qr(req: QRVerifyRequest, db: Session = Depends(get_db)):
     if not verify_res.get("valid"):
         return {"success": False, "error": verify_res.get("error"), "code": "INVALID_OR_EXPIRED_QR"}
 
-    user = db.query(User).filter(
-        (User.student_id == student_id) | (User.id == 1)
-    ).first()
+    user = db.query(User).filter(User.student_id == student_id).first()
 
     if not user:
-        return {"success": False, "error": f"Student ID '{student_id}' not found.", "code": "STUDENT_NOT_FOUND"}
+        import logging
+        logging.getLogger("coopsync.security").warning(f"[Security Audit] Rejected QR attendance for unassigned student ID: {student_id}")
+        return {"success": False, "error": f"Student ID '{student_id}' is not registered in the system.", "code": "STUDENT_NOT_FOUND"}
 
     today = datetime.now().strftime("%Y-%m-%d")
     time_now = datetime.now().strftime("%H:%M:%S")
@@ -1677,7 +1748,10 @@ def sync_offline_records(req: OfflineSyncRequest, db: Session = Depends(get_db))
             (User.student_id == item.student_id) | (User.name.ilike(item.student_name))
         ).first()
         if not user:
-            user = db.query(User).first()
+            import logging
+            logging.getLogger("coopsync.security").warning(f"[Security Audit] Rejected offline sync record for unverified student: {item.student_id} / {item.student_name}")
+            results.append({"student_id": item.student_id, "status": "rejected_unknown_student", "error": f"Student ID '{item.student_id}' is not registered in ERP"})
+            continue
 
         existing = db.query(Attendance).filter(
             Attendance.user_id == user.id,
@@ -1837,7 +1911,7 @@ def clear_attendance_logs(db: Session = Depends(get_db)):
 
 # 5. Course Management
 @app.get("/api/courses")
-def get_courses(db: Session = Depends(get_db)):
+def get_courses(current_user: User = Depends(auth_get_current_user), db: Session = Depends(get_db)):
     return db.query(Course).all()
 
 @app.post("/api/courses")
@@ -1886,7 +1960,7 @@ def get_certificates(student_name: Optional[str] = None, db: Session = Depends(g
     return query.order_by(Certificate.id.desc()).all()
 
 @app.post("/api/certificates/generate")
-def generate_cert(student_name: str = Body(..., embed=True), course_title: str = Body(..., embed=True), db: Session = Depends(get_db)):
+def generate_cert(student_name: str = Body(..., embed=True), course_title: str = Body(..., embed=True), current_user: User = Depends(auth_get_current_user), db: Session = Depends(get_db)):
     s_name = student_name.strip()
     c_title = course_title.strip()
 
@@ -1944,15 +2018,22 @@ def generate_cert(student_name: str = Body(..., embed=True), course_title: str =
     }
 
 @app.get("/api/certificates/download/{cert_id}")
-def download_cert(cert_id: str):
+def download_cert(cert_id: str, current_user: User = Depends(get_optional_current_user)):
     pdf_path = os.path.join(CERTIFICATES_DIR, f"certificate_{cert_id}.pdf")
     if not os.path.exists(pdf_path):
-        # Auto regenerate
-        pdf_path = generate_pdf_certificate(
-            student_name="Puneet",
-            course_title="AI-Enabled Computer Vision & Face Biometrics",
-            cert_id=cert_id
-        )
+        from database import SessionLocal
+        _db = SessionLocal()
+        try:
+            _cert_row = _db.query(Certificate).filter(Certificate.certificate_no == cert_id).first()
+            _s_name = _cert_row.student_name if _cert_row else "Student"
+            _c_title = _cert_row.course_title if _cert_row else "Cooperative Skills Certification"
+            pdf_path = generate_pdf_certificate(
+                student_name=_s_name,
+                course_title=_c_title,
+                cert_id=cert_id
+            )
+        finally:
+            _db.close()
     return FileResponse(pdf_path, media_type="application/pdf", filename=f"CoopSync_Certificate_{cert_id}.pdf")
 
 @app.get("/api/certificates/verify/{cert_id}")
@@ -1982,7 +2063,8 @@ def verify_cert(cert_id: str, db: Session = Depends(get_db)):
 
 # 7. Employment Portal
 @app.get("/api/jobs")
-def get_jobs(user_id: Optional[int] = 1, db: Session = Depends(get_db)):
+def get_jobs(current_user: User = Depends(auth_get_current_user), db: Session = Depends(get_db)):
+    user_id = current_user.id
     user = db.query(User).filter(User.id == user_id).first()
     skills = user.skills if user else "Python, OpenCV"
     jobs = db.query(Job).all()
@@ -2009,7 +2091,8 @@ def get_jobs(user_id: Optional[int] = 1, db: Session = Depends(get_db)):
     return result
 
 @app.post("/api/jobs/apply")
-def apply_job(req: JobApplyRequest, db: Session = Depends(get_db)):
+def apply_job(req: JobApplyRequest, current_user: User = Depends(auth_get_current_user), db: Session = Depends(get_db)):
+    req.user_id = current_user.id
     job = db.query(Job).filter(Job.id == req.job_id).first()
     user = db.query(User).filter(User.id == req.user_id).first()
     
@@ -2190,7 +2273,7 @@ class RetrainModelRequest(BaseModel):
     requester_role: Optional[str] = "admin"
 
 @app.get("/api/risk/overview")
-def get_risk_overview(db: Session = Depends(get_db)):
+def get_risk_overview(current_user: User = Depends(require_role("trainer", "admin", "ncct_admin")), db: Session = Depends(get_db)):
     """Aggregated KPI cards, risk distribution, trends and active model metrics"""
     return risk_engine.get_overview_analytics(db)
 
@@ -2200,6 +2283,7 @@ def get_risk_students(
     department: Optional[str] = None,
     semester: Optional[str] = None,
     search: Optional[str] = None,
+    current_user: User = Depends(require_role("trainer", "admin", "ncct_admin")),
     db: Session = Depends(get_db)
 ):
     """List of all student early warning risk profiles with filtering"""
@@ -2271,13 +2355,25 @@ def get_risk_students(
     return results
 
 @app.get("/api/risk/student/{student_id}")
-def get_student_risk_profile(student_id: str, db: Session = Depends(get_db)):
+def get_student_risk_profile(
+    student_id: str, 
+    current_user: User = Depends(auth_get_current_user), 
+    db: Session = Depends(get_db)
+):
     """Deep-dive explainable risk report for an individual student"""
     user = db.query(User).filter(
         (User.student_id == student_id) | (User.id == (int(student_id) if student_id.isdigit() else -1))
     ).first()
     if not user:
         raise HTTPException(status_code=404, detail="Student not found")
+
+    # Task 4 & Task 8: Cross-user data isolation (Student can only view their own risk profile)
+    verify_ownership_or_roles(
+        current_user, 
+        target_student_id=user.student_id, 
+        target_user_id=user.id, 
+        elevated_roles=["trainer", "admin", "ncct_admin"]
+    )
 
     pred_record = db.query(StudentRiskPrediction).filter(
         StudentRiskPrediction.user_id == user.id
@@ -2517,7 +2613,7 @@ def create_intervention(req: RecordInterventionRequest, db: Session = Depends(ge
     }
 
 @app.put("/api/risk/interventions/{intervention_id}")
-def update_intervention(intervention_id: int, req: UpdateInterventionRequest, db: Session = Depends(get_db)):
+def update_intervention(intervention_id: int, req: UpdateInterventionRequest, current_user: User = Depends(require_role("trainer", "admin", "ncct_admin")), db: Session = Depends(get_db)):
     """Update status, action or follow-up outcome for an intervention"""
     inv = db.query(StudentIntervention).filter(StudentIntervention.id == intervention_id).first()
     if not inv:
@@ -2616,7 +2712,7 @@ def retrain_model_endpoint(req: RetrainModelRequest, db: Session = Depends(get_d
     return res
 
 @app.post("/api/risk/assessments")
-def add_student_assessment(req: AddAssessmentRequest, db: Session = Depends(get_db)):
+def add_student_assessment(req: AddAssessmentRequest, current_user: User = Depends(require_role("trainer", "admin", "ncct_admin")), db: Session = Depends(get_db)):
     """Record assessment score for a student and update risk profile"""
     user = db.query(User).filter(
         (User.student_id == req.student_id) | (User.id == (int(req.student_id) if req.student_id.isdigit() else -1))

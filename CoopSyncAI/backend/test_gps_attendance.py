@@ -31,6 +31,21 @@ except Exception:
     USE_TEST_CLIENT = False
     BASE_URL = "http://localhost:8000"
 
+from auth.jwt_handler import create_access_token
+from database import SessionLocal, User
+
+_db = SessionLocal()
+try:
+    _admin_u = _db.query(User).filter(User.role.in_(["admin", "ncct_admin"])).first()
+    _student_u = _db.query(User).filter(User.role == "student").first()
+    _admin_token = create_access_token(_admin_u.id if _admin_u else 1, "admin", _admin_u.email if _admin_u else "admin@coopsync.edu")
+    _student_token = create_access_token(_student_u.id if _student_u else 2, "student", _student_u.email if _student_u else "student@coopsync.edu")
+finally:
+    _db.close()
+
+ADMIN_HEADERS = {"Authorization": f"Bearer {_admin_token}"}
+STUDENT_HEADERS = {"Authorization": f"Bearer {_student_token}"}
+
 class ApiWrapper:
     def get(self, path, **kwargs):
         if USE_TEST_CLIENT:
@@ -86,7 +101,7 @@ def test_institution_config_api():
         "allowed_radius_meters": 5000.0,
         "requester_role": "student"
     }
-    res_unauth = api.put("/api/institution/config", json=unauth_payload)
+    res_unauth = api.put("/api/institution/config", json=unauth_payload, headers=STUDENT_HEADERS)
     passed_unauth = res_unauth.status_code == 403
     log_test("Reject Unauthorized Config Update (Student Role)", passed_unauth, f"HTTP {res_unauth.status_code}")
 
@@ -100,7 +115,7 @@ def test_institution_config_api():
         "enforce_geofence": True,
         "requester_role": "admin"
     }
-    res_auth = api.put("/api/institution/config", json=auth_payload)
+    res_auth = api.put("/api/institution/config", json=auth_payload, headers=ADMIN_HEADERS)
     passed_auth = res_auth.status_code == 200 and res_auth.json().get("success")
     log_test("Authorized Config Update (Admin Role)", passed_auth, f"Updated: {res_auth.json().get('message')}")
 
@@ -113,14 +128,14 @@ def test_gps_attendance_scenarios():
     log_test("Dynamic 30s QR Generation", bool(token), f"Session: {session_id}")
 
     # Clear previous attendance logs for clean test state
-    api.post("/api/attendance/clear")
+    api.post("/api/attendance/clear", headers=ADMIN_HEADERS)
 
     # Campus coordinates: (28.6139, 77.2090)
 
     # --- Test 1: Missing GPS Coordinates (User denied permission) ---
     req_denied = {
         "qr_text": token,
-        "student_id": "5025088",
+        "student_id": "303",
         "latitude": None,
         "longitude": None,
         "accuracy": None
@@ -132,7 +147,7 @@ def test_gps_attendance_scenarios():
     # --- Test 2: Invalid / Out-of-bounds Coordinates ---
     req_invalid = {
         "qr_text": token,
-        "student_id": "5025088",
+        "student_id": "303",
         "latitude": 999.0,
         "longitude": 77.2090,
         "accuracy": 10.0
@@ -144,7 +159,7 @@ def test_gps_attendance_scenarios():
     # --- Test 3: Poor Accuracy Signal (> 100m threshold) ---
     req_poor = {
         "qr_text": token,
-        "student_id": "5025088",
+        "student_id": "303",
         "latitude": 28.61391,
         "longitude": 77.20901,
         "accuracy": 145.0  # Accuracy ±145m is too poor
@@ -157,7 +172,7 @@ def test_gps_attendance_scenarios():
     # Coordinates ~1.6km away
     req_outside = {
         "qr_text": token,
-        "student_id": "5025088",
+        "student_id": "303",
         "latitude": 28.6250,
         "longitude": 77.2200,
         "accuracy": 8.0
@@ -170,7 +185,7 @@ def test_gps_attendance_scenarios():
     # Coordinates ~1.5 meters from campus center
     req_inside = {
         "qr_text": token,
-        "student_id": "5025088",
+        "student_id": "303",
         "latitude": 28.61391,
         "longitude": 77.20901,
         "accuracy": 6.5,
@@ -203,7 +218,7 @@ def test_offline_gps_revalidation():
         "records": [
             {
                 # Record A: Inside radius -> should be confirmed Present
-                "student_id": "4868448",
+                "student_id": "112",
                 "student_name": "Ranjan",
                 "date": "2026-10-24",
                 "time": "10:15:00",
@@ -215,8 +230,8 @@ def test_offline_gps_revalidation():
             },
             {
                 # Record B: Outside radius -> must be flagged / pending verification
-                "student_id": "577575",
-                "student_name": "Varun",
+                "student_id": "111",
+                "student_name": "Muskan",
                 "date": "2026-10-24",
                 "time": "10:16:00",
                 "method": "Offline Mobile Cache",
@@ -235,7 +250,7 @@ def test_offline_gps_revalidation():
 
 def test_attendance_logs_telemetry():
     """Verify that GPS telemetry (lat, lon, distance, geofence_status) is in attendance logs"""
-    res = api.get("/api/attendance/logs").json()
+    res = api.get("/api/attendance/logs", headers=ADMIN_HEADERS).json()
     passed = False
     for r in res:
         if r.get("distance") is not None and r.get("latitude") is not None and "Verified" in (r.get("geofence_status") or ""):

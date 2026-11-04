@@ -359,7 +359,8 @@ class StudentRiskEngine:
         }
 
         # Save model to disk
-        version_name = f"v{datetime.now().strftime('%Y%m%d%H%M')}-{model_type[:6].lower()}"
+        import random as _rnd
+        version_name = f"v{datetime.now().strftime('%Y%m%d%H%M%S')}-{_rnd.randint(100, 999)}-{model_type[:6].lower()}"
         metadata = {
             "version_name": version_name,
             "model_type": model_type,

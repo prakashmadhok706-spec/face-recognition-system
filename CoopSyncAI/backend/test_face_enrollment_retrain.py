@@ -1,4 +1,22 @@
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from auth.jwt_handler import create_access_token
+from database import SessionLocal, User
+
+_db = SessionLocal()
+try:
+    _admin_u = _db.query(User).filter(User.role.in_(["admin", "ncct_admin"])).first()
+    _student_u = _db.query(User).filter(User.role == "student").first()
+    _admin_token = create_access_token(_admin_u.id if _admin_u else 1, "admin", _admin_u.email if _admin_u else "admin@coopsync.edu")
+    _student_token = create_access_token(_student_u.id if _student_u else 2, "student", _student_u.email if _student_u else "student@coopsync.edu")
+finally:
+    _db.close()
+
+ADMIN_AUTH_HEADER = {"Authorization": f"Bearer {_admin_token}"}
+STUDENT_AUTH_HEADER = {"Authorization": f"Bearer {_student_token}"}
+
+import sys
 import base64
 import cv2
 import numpy as np
@@ -19,10 +37,13 @@ def http_get(endpoint):
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
-def http_post(endpoint, payload):
+def http_post(endpoint, payload, extra_headers=ADMIN_AUTH_HEADER):
     url = f"{BASE_URL}/{endpoint.lstrip('/')}"
     data = json.dumps(payload).encode('utf-8')
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}, method="POST")
+    hdrs = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+    if extra_headers:
+        hdrs.update(extra_headers)
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
     try:
         with urllib.request.urlopen(req) as resp:
             return json.loads(resp.read().decode('utf-8'))
@@ -57,20 +78,19 @@ def test_all():
     res = http_post("students/capture-sample", {
         "student_id": "5025088",
         "student_name": "Puneet",
-        "image_base64": b64_sample,
-        "requester_role": "student"
-    })
+        "image_base64": b64_sample
+    }, extra_headers=STUDENT_AUTH_HEADER)
     assert not res.get("success"), "Student role should be rejected!"
-    assert "Unauthorized" in res.get("error", ""), f"Expected Unauthorized error: {res}"
-    print("[PASS] Unauthorized student role successfully blocked:", res.get("error"))
+    err_str = res.get("error", "") or res.get("detail", "")
+    assert "Unauthorized" in err_str or "forbidden" in err_str.lower() or "privileges" in err_str.lower(), f"Expected Auth error: {res}"
+    print("[PASS] Unauthorized student role successfully blocked:", err_str)
 
     print("\n=== 3. Testing Empty Student ID ===")
     res = http_post("students/capture-sample", {
         "student_id": "   ",
         "student_name": "Ghost User",
-        "image_base64": b64_sample,
-        "requester_role": "admin"
-    })
+        "image_base64": b64_sample
+    }, extra_headers=ADMIN_AUTH_HEADER)
     assert not res.get("success"), "Empty student ID should fail"
     assert "cannot be empty" in res.get("error", "").lower() or "invalid" in res.get("error", "").lower(), f"Expected empty id message: {res}"
     print("[PASS] Empty student ID rejected:", res.get("error"))
@@ -127,9 +147,8 @@ def test_all():
             "student_id": "5025088",
             "student_name": "Puneet",
             "image_base64": valid_b64,
-            "requester_role": "admin",
             "target_samples": 50
-        })
+        }, extra_headers=ADMIN_AUTH_HEADER)
         print("Valid sample capture response:", res)
         assert res.get("success"), f"Valid sample should be accepted: {res}"
         assert res.get("samples_count", 0) > 0
@@ -140,7 +159,7 @@ def test_all():
     print("Sample count before reset:", count_res)
     assert count_res.get("success")
 
-    reset_res = http_post("students/5025088/reset-samples", {"requester_role": "admin"})
+    reset_res = http_post("students/5025088/reset-samples", {}, extra_headers=ADMIN_AUTH_HEADER)
     print("Reset response:", reset_res)
     assert reset_res.get("success")
     assert reset_res.get("samples_count") == 0
@@ -160,7 +179,7 @@ def test_all():
         time.sleep(1)
 
     # Trigger training as admin
-    train_res = http_post("train", {"requester_role": "admin"})
+    train_res = http_post("train", {}, extra_headers=ADMIN_AUTH_HEADER)
     assert train_res.get("success"), f"Training start failed: {train_res}"
     print("[PASS] Retraining queued successfully:", train_res)
 
