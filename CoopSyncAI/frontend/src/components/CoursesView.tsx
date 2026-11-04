@@ -22,7 +22,7 @@ import {
   Play,
   Image as ImageIcon
 } from 'lucide-react';
-import { fetchCourses, createCourse, generateCertificate, updateStudentApi } from '../api';
+import { fetchCourses, createCourse, generateCertificate, updateStudentApi, enrollCourseApi, fetchMyEnrollmentsApi, fetchCourseProgressApi, updateModuleProgressApi } from '../api';
 import { CourseItem, UserProfile } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -89,28 +89,24 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
   // Course Syllabus / Modules Modal State
   const [activeCourseModal, setActiveCourseModal] = useState<CourseItem | null>(null);
   
-  // Persistent Enrolled Courses State in localStorage — keyed per student
-  const getStorageKey = (userId: string) => `coopsync_enrolled_courses_${userId}`;
+  // Authoritative LMS Enrollment State from Backend API
+  const [enrolledCourses, setEnrolledCourses] = useState<number[]>([]);
+  const [activeCourseProgress, setActiveCourseProgress] = useState<any>(null);
 
-  const [enrolledCourses, setEnrolledCourses] = useState<number[]>(() => {
+  const loadEnrollments = async () => {
     try {
-      const key = getStorageKey(currentUser.student_id);
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+      const res = await fetchMyEnrollmentsApi();
+      if (Array.isArray(res)) {
+        const ids = res.map((item: any) => item.course_id);
+        setEnrolledCourses(ids);
+      }
+    } catch (e) {
+      console.error('Failed to load student enrollments:', e);
     }
-  });
+  };
 
-  // Reload enrolled courses when currentUser changes
   useEffect(() => {
-    try {
-      const key = getStorageKey(currentUser.student_id);
-      const saved = localStorage.getItem(key);
-      setEnrolledCourses(saved ? JSON.parse(saved) : []);
-    } catch {
-      setEnrolledCourses([]);
-    }
+    loadEnrollments();
   }, [currentUser.student_id]);
 
   useEffect(() => {
@@ -152,48 +148,75 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ currentUser }) => {
     }
   };
 
-  const handleEnrollCourse = (courseId: number) => {
-    setEnrolledCourses(prev => {
-      if (!prev.includes(courseId)) {
-        const next = [...prev, courseId];
-        try {
-          const key = getStorageKey(currentUser.student_id);
-          localStorage.setItem(key, JSON.stringify(next));
-        } catch (e) {
-          console.warn('Storage save error:', e);
-        }
-        
+  const handleEnrollCourse = async (courseId: number) => {
+    try {
+      const res = await enrollCourseApi(courseId);
+      if (res && (res.success || res.enrollment)) {
+        setEnrolledCourses(prev => Array.from(new Set([...prev, courseId])));
         const course = courses.find(c => c.id === courseId);
-        if (course) {
-          // 1. Auto-generate certificate for this student + course
-          generateCertificate(currentUser.name, course.title)
-            .then(() => console.log(`Certificate generated for ${currentUser.name} – ${course.title}`))
-            .catch(e => console.warn('Certificate generation error:', e));
-
-          // 2. Auto-update student skills in ERP Capacity profile & SQLite database
-          if (currentUser.student_id) {
-            const courseSkills = getSkillsForCourse(course);
-            const currentSkillsArr = currentUser.skills 
-              ? currentUser.skills.split(',').map(s => s.trim()).filter(Boolean)
-              : [];
-            const combined = Array.from(new Set([...currentSkillsArr, ...courseSkills]));
-            const updatedSkillsStr = combined.join(', ');
-            
-            currentUser.skills = updatedSkillsStr;
-            updateStudentApi(currentUser.student_id, { skills: updatedSkillsStr })
-              .then((res) => {
-                console.log('Student skills updated via course enrollment:', res);
-                setEnrollToast(`🎉 Successfully Enrolled in ${course.title}! Updated Capacity Profile Tech Stack with: ${courseSkills.join(', ')}`);
-                setTimeout(() => setEnrollToast(null), 7000);
-              })
-              .catch(e => console.warn('Skills update error:', e));
-          }
+        if (course && currentUser.student_id) {
+          const courseSkills = getSkillsForCourse(course);
+          const currentSkillsArr = currentUser.skills 
+            ? currentUser.skills.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+          const combined = Array.from(new Set([...currentSkillsArr, ...courseSkills]));
+          const updatedSkillsStr = combined.join(', ');
+          
+          currentUser.skills = updatedSkillsStr;
+          updateStudentApi(currentUser.student_id, { skills: updatedSkillsStr })
+            .then(() => {
+              setEnrollToast(`🎉 Successfully Enrolled in ${course.title}! LMS Progress & Modules tracking initialized.`);
+              setTimeout(() => setEnrollToast(null), 6000);
+            })
+            .catch(e => console.warn('Skills update error:', e));
         }
         confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
-        return next;
+        await loadEnrollments();
       }
-      return prev;
-    });
+    } catch (e) {
+      console.error('Enrollment error:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeCourseModal && enrolledCourses.includes(activeCourseModal.id)) {
+      fetchCourseProgressApi(activeCourseModal.id)
+        .then(res => setActiveCourseProgress(res))
+        .catch(err => console.warn('Failed to load progress:', err));
+    } else {
+      setActiveCourseProgress(null);
+    }
+  }, [activeCourseModal, enrolledCourses]);
+
+  const handleToggleModuleComplete = async (courseId: number, moduleId: number, currentCompleted: boolean) => {
+    try {
+      const res = await updateModuleProgressApi(courseId, moduleId, { is_completed: !currentCompleted, time_spent_minutes: 20 });
+      if (res && res.success) {
+        const updated = await fetchCourseProgressApi(courseId);
+        setActiveCourseProgress(updated);
+        await loadEnrollments();
+        if (res.progress_percentage >= 100) {
+          confetti({ particleCount: 100, spread: 90, origin: { y: 0.5 } });
+        }
+      }
+    } catch (err) {
+      console.error('Module update error:', err);
+    }
+  };
+
+  const handleClaimCertificate = async (courseTitle: string) => {
+    try {
+      const res = await generateCertificate(currentUser.name, courseTitle);
+      if (res && res.success) {
+        setEnrollToast(`🎓 Authentic Digital Certificate Issued! Available under your verified credentials.`);
+        setTimeout(() => setEnrollToast(null), 6000);
+        confetti({ particleCount: 120, spread: 100, origin: { y: 0.4 } });
+      } else {
+        alert(res?.detail || res?.message || 'Could not claim certificate.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error claiming certificate.');
+    }
   };
 
   // YouTube Mapping and Redirect Resolver

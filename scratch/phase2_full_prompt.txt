@@ -1,0 +1,465 @@
+<USER_REQUEST>
+# COOPSYNC AI: PHASE 2 IMPLEMENTATION
+## Database Architecture, Data Integrity and Complete Backend Integration
+
+ROLE:
+
+Act as a Principal Database Architect, Senior SQLAlchemy Engineer and Full-Stack Backend Integration Engineer.
+
+Phase 1 security hardening has been completed. Your task is to implement Phase 2 of the CoopSync AI technical remediation roadmap.
+
+The objective is to ensure that every important application module uses a properly interconnected backend and database, with reliable persistence, valid relationships, transaction management and data consistency.
+
+IMPORTANT:
+This is an existing application. Do not rebuild it from scratch.
+
+Do not assume Phase 1 was implemented correctly. First inspect and verify the authentication, JWT and RBAC changes before proceeding.
+
+==================================================
+1. INITIAL DATABASE AND SECURITY INSPECTION
+==================================================
+
+Before modifying anything:
+
+1. Inspect the current repository.
+2. Inspect all SQLAlchemy models.
+3. Inspect the existing database schema.
+4. Inspect all foreign key relationships.
+5. Inspect API endpoints related to database operations.
+6. Inspect frontend API integrations.
+7. Verify Phase 1 authentication and authorization.
+8. Identify existing migrations.
+9. Identify existing database records.
+10. Identify existing SQLite and PostgreSQL configurations.
+
+Verify that the security changes from Phase 1 are functioning.
+
+If Phase 1 has unresolved critical vulnerabilities, report them and stop before implementing database changes that depend on insecure identity handling.
+
+Create a Git checkpoint and database backup before modifications.
+
+==================================================
+2. IMPLEMENT COURSE ENROLLMENT DATABASE MODEL
+==================================================
+
+The audit identified that course enrollment and progress are stored in browser localStorage instead of the backend.
+
+This must be corrected.
+
+Create a proper SQLAlchemy CourseEnrollment model.
+
+Required relationships:
+
+User → CourseEnrollment → Course
+
+Recommended fields:
+
+- id
+- student_id
+- course_id
+- enrollment_date
+- enrollment_status
+- progress_percentage
+- completed_modules
+- total_modules
+- started_at
+- completed_at
+- last_accessed_at
+- created_at
+- updated_at
+
+Requirements:
+
+- Proper primary and foreign keys.
+- Unique student-course enrollment constraint.
+- Appropriate database indexes.
+- Valid enrollment status transitions.
+- Correct transaction handling.
+- Prevent duplicate enrollment.
+- Prevent unauthorized enrollment modification.
+- Support multiple courses per student.
+- Support multiple students per course.
+
+Create a separate CourseModuleProgress model if necessary to track module-level completion accurately.
+
+Do not store complex progress data only as unvalidated JSON when relational records would provide better integrity.
+
+==================================================
+3. CONNECT THE LMS TO THE BACKEND
+==================================================
+
+Inspect:
+
+frontend/src/components/CoursesView.tsx
+
+Remove localStorage as the authoritative source for:
+
+- Course enrollments.
+- Module completion.
+- Course progress.
+- Course completion status.
+
+Implement backend API integration.
+
+Required endpoints:
+
+POST /api/courses/{course_id}/enroll
+
+GET /api/students/me/enrollments
+
+GET /api/courses/{course_id}/progress
+
+PUT /api/courses/{course_id}/modules/{module_id}/progress
+
+GET /api/students/me/learning-progress
+
+POST /api/courses/{course_id}/complete
+
+Endpoint names may be adapted to the existing API conventions.
+
+Requirements:
+
+- Authenticated student identity.
+- Server-side student ownership validation.
+- Duplicate enrollment prevention.
+- Valid course existence checks.
+- Module ownership validation.
+- Progress calculation on the server.
+- Correct completion validation.
+- Database persistence.
+- Proper error responses.
+- Loading, empty and error states in the frontend.
+
+A browser refresh, logout or new login must not erase learning progress.
+
+==================================================
+4. CONNECT COURSE COMPLETION TO DIGITAL CERTIFICATES
+==================================================
+
+The current system can generate certificates without sufficiently verifying actual course completion.
+
+Fix this.
+
+Requirements:
+
+1. Student must be enrolled in the course.
+2. All required course modules must be completed.
+3. Required assessments must be passed if configured.
+4. Completion eligibility must be calculated on the backend.
+5. Certificate issuance must be transactional.
+6. Duplicate certificates must be prevented.
+7. Certificate records must reference the correct student and course.
+8. Public certificate verification must validate actual database records.
+9. Certificate revocation must be supported.
+10. Certificate download must use the correct owner's database information.
+
+Fix the existing certificate PDF regeneration bug.
+
+Never hardcode a student name or course name when regenerating a missing certificate file.
+
+Retrieve the original information from the database.
+
+Preserve existing valid certificates.
+
+==================================================
+5. ENABLE DATABASE INTEGRITY ENFORCEMENT
+==================================================
+
+For SQLite:
+
+- Enable PRAGMA foreign_keys = ON for every connection.
+- Configure WAL mode where appropriate.
+- Set an appropriate busy timeout.
+- Configure connection handling correctly.
+- Validate cascading behavior.
+- Handle database locking gracefully.
+
+For PostgreSQL:
+
+- Verify foreign key constraints.
+- Verify unique constraints.
+- Verify indexes.
+- Configure connection pooling.
+- Verify transaction isolation requirements.
+
+Ensure SQLite and PostgreSQL schemas remain compatible where supported.
+
+Do not assume that SQLAlchemy relationships alone enforce database-level integrity.
+
+==================================================
+6. COMPLETE DATABASE RELATIONSHIP AUDIT
+==================================================
+
+Inspect and validate all existing modules.
+
+Verify these relationships:
+
+A. USERS AND INSTITUTIONS
+
+Institution → Students
+Institution → Trainers
+Institution → Institution Admins
+
+B. STUDENT AND ATTENDANCE
+
+Student → Attendance Records
+Attendance → Training Session
+Attendance → Institution
+
+C. STUDENT AND LMS
+
+Student → Course Enrollment
+Course → Course Enrollment
+Course → Course Modules
+Course Module → Module Progress
+
+D. STUDENT AND CERTIFICATES
+
+Student → Certificates
+Course → Certificates
+Certificate → Verification Records
+
+E. STUDENT AND PLACEMENT
+
+Student → Job Applications
+Employer → Job Listings
+Job Listing → Job Applications
+
+F. STUDENT AND AI PERFORMANCE
+
+Student → Assessments
+Student → Risk Predictions
+Student → Interventions
+Student → Prediction Feedback
+
+G. USERS AND AUTHENTICATION
+
+User → Roles / Permissions
+User → Sessions or Refresh Tokens, if implemented
+User → Audit Logs
+
+IMPORTANT:
+
+Do not invent relationships that are not supported by the current business logic.
+
+Where a required relationship is missing, explain why it is needed and implement it only after validating the existing architecture.
+
+==================================================
+7. FIX ATTENDANCE AND OFFLINE SYNCHRONIZATION
+==================================================
+
+The previous audit identified that unmatched offline attendance records can be assigned to User 1.
+
+Permanently eliminate this behavior.
+
+Requirements:
+
+- Never assign records to a default user.
+- Verify student identity.
+- Verify attendance session.
+- Validate institution association.
+- Validate server-side timestamps.
+- Validate GPS information where required.
+- Use idempotency keys.
+- Prevent duplicate synchronization.
+- Track synchronization status.
+- Record rejected records with appropriate audit information.
+- Support safe retries.
+- Handle conflicts explicitly.
+
+Never silently change an attendance record's owner.
+
+==================================================
+8. DATABASE SEEDING AND JOB BOARD
+==================================================
+
+The audit identified that the jobs table is empty because demonstration seeding was disabled.
+
+Implement a controlled database seeding system.
+
+Requirements:
+
+- Seed initial course records.
+- Seed sample cooperative job listings.
+- Associate sample jobs with valid employer records.
+- Associate courses with valid skills.
+- Prevent duplicate seed records.
+- Keep sample data clearly identifiable.
+- Make seeding idempotent.
+- Never overwrite real production data.
+- Keep development and production seed configurations separate.
+
+Do not invent actual employer partnerships or represent sample job listings as verified real vacancies.
+
+==================================================
+9. DATABASE MIGRATIONS WITH ALEMBIC
+==================================================
+
+Implement formal Alembic migrations.
+
+Requirements:
+
+- Create initial migration baseline where appropriate.
+- Create CourseEnrollment migration.
+- Create module progress migration.
+- Add missing foreign keys.
+- Add required indexes.
+- Add unique constraints.
+- Preserve existing records.
+- Support SQLite and PostgreSQL where possible.
+- Test both upgrade and rollback procedures.
+
+Do not rely on ad-hoc ALTER TABLE statements inside init_db().
+
+Ensure migrations work against a copy of the existing database before applying them to any important environment.
+
+==================================================
+10. TRANSACTION AND DATA CONSISTENCY TESTING
+==================================================
+
+Test:
+
+- Duplicate course enrollment.
+- Invalid student ID.
+- Invalid course ID.
+- Invalid module ID.
+- Unauthorized progress modification.
+- Course completion without enrollment.
+- Certificate generation before completion.
+- Duplicate certificate generation.
+- Deletion of referenced records.
+- Concurrent enrollment requests.
+- Concurrent progress updates.
+- Failed database transactions.
+- Database rollback.
+- Offline attendance retry.
+- Duplicate attendance synchronization.
+
+Verify that failed operations do not leave partial or inconsistent records.
+
+==================================================
+11. FRONTEND INTEGRATION
+==================================================
+
+Update the relevant React components.
+
+Ensure:
+
+- Course enrollment uses backend APIs.
+- Enrollment state is retrieved from the server.
+- Module completion is persisted.
+- Progress indicators use actual database data.
+- Completed courses are displayed correctly.
+- Certificate eligibility comes from backend validation.
+- Errors are displayed accurately.
+- Loading states work correctly.
+- Data refreshes after successful mutations.
+
+Never show a course as completed simply because a frontend button was clicked.
+
+==================================================
+12. AUTOMATED TESTING
+==================================================
+
+Use:
+
+- pytest.
+- FastAPI TestClient or HTTPX.
+- SQLAlchemy integration tests.
+- React Testing Library.
+- Vitest.
+- Playwright where appropriate.
+
+Create tests for:
+
+- Course enrollment CRUD.
+- Module progress persistence.
+- Database relationship integrity.
+- Foreign key enforcement.
+- Student ownership restrictions.
+- Course completion.
+- Certificate eligibility.
+- Certificate verification.
+- Attendance identity validation.
+- Offline synchronization.
+- Database migration.
+- Duplicate record prevention.
+- Concurrent database operations.
+
+Run all existing tests after implementation.
+
+Do not suppress failures or modify tests merely to produce a passing result.
+
+==================================================
+13. PHASE 2 ACCEPTANCE CRITERIA
+==================================================
+
+Phase 2 can only be considered complete if:
+
+1. CourseEnrollment exists in the actual database.
+2. LMS enrollment persists in the backend.
+3. Module progress survives logout and browser refresh.
+4. Student-course relationships are enforced.
+5. Course completion is verified server-side.
+6. Certificate generation checks real completion.
+7. Existing valid certificates remain intact.
+8. Foreign keys are enforced.
+9. Offline attendance cannot be assigned to another user.
+10. Database migrations execute successfully.
+11. Existing authentication and RBAC remain functional.
+12. Backend and frontend integration tests pass.
+13. No critical data integrity failures remain.
+
+==================================================
+14. FINAL IMPLEMENTATION REPORT
+==================================================
+
+After finishing, provide:
+
+A. Summary of implemented functionality.
+
+B. Database tables created or modified.
+
+C. Entity relationship diagram showing the updated database.
+
+D. New and modified API endpoints.
+
+E. Files created and modified with exact paths.
+
+F. Migration details and commands.
+
+G. Existing data preservation results.
+
+H. Automated test results.
+
+I. Failed tests and unresolved issues.
+
+J. Performance implications.
+
+K. Remaining database and integration risks.
+
+L. Updated project health assessment.
+
+M. Recommended next phase.
+
+Be honest about incomplete work.
+
+Do not mark untested features as completed.
+
+Do not automatically start Phase 3.
+
+STOP after delivering the complete Phase 2 report and wait for my approval.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-04T22:59:43+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\scratch\patch_face_test.py (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 101
+Other open documents:
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\CoopSyncAI\PROGRESS.md (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\CoopSyncAI\INTERVIEW_QUESTIONS_SHORT.txt (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\CoopSyncAI\INTERVIEW_QUESTIONS.txt (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\.git\COMMIT_EDITMSG (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\.gitignore (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

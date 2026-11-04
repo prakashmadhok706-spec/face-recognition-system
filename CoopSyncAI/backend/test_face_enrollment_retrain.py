@@ -29,30 +29,21 @@ import os
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-BASE_URL = "http://127.0.0.1:8000/api"
+from fastapi.testclient import TestClient
+from main import app
+
+_test_client = TestClient(app)
 
 def http_get(endpoint):
-    url = f"{BASE_URL}/{endpoint.lstrip('/')}"
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode('utf-8'))
+    resp = _test_client.get(f"/api/{endpoint.lstrip('/')}")
+    return resp.json()
 
 def http_post(endpoint, payload, extra_headers=ADMIN_AUTH_HEADER):
-    url = f"{BASE_URL}/{endpoint.lstrip('/')}"
-    data = json.dumps(payload).encode('utf-8')
-    hdrs = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-    if extra_headers:
-        hdrs.update(extra_headers)
-    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+    resp = _test_client.post(f"/api/{endpoint.lstrip('/')}", json=payload, headers=extra_headers)
     try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read().decode('utf-8'))
-    except urllib.error.HTTPError as e:
-        body = e.read().decode('utf-8')
-        try:
-            return json.loads(body)
-        except Exception:
-            return {"success": False, "error": f"HTTP {e.code}: {body}"}
+        return resp.json()
+    except Exception:
+        return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text}"}
 
 def create_blank_image(width=640, height=480, color=(0, 0, 0)):
     img = np.full((height, width, 3), color, dtype=np.uint8)

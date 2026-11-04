@@ -1,0 +1,112 @@
+<USER_REQUEST>
+# COOPSYNC AI: PHASE 2 IMPLEMENTATION
+## Database Architecture, Data Integrity and Complete Backend Integration
+
+ROLE:
+
+Act as a Principal Database Architect, Senior SQLAlchemy Engineer and Full-Stack Backend Integration Engineer.
+
+Phase 1 security hardening has been completed. Your task is to implement Phase 2 of the CoopSync AI technical remediation roadmap.
+
+The objective is to ensure that every important application module uses a properly interconnected backend and database, with reliable persistence, valid relationships, transaction management and data consistency.
+
+IMPORTANT:
+This is an existing application. Do not rebuild it from scratch.
+
+Do not assume Phase 1 was implemented correctly. First inspect and verify the authentication, JWT and RBAC changes before proceeding.
+
+==================================================
+1. INITIAL DATABASE AND SECURITY INSPECTION
+==================================================
+
+Before modifying anything:
+
+1. Inspect the current repository.
+2. Inspect all SQLAlchemy models.
+3. Inspect the existing database schema.
+4. Inspect all foreign key relationships.
+5. Inspect API endpoints related to database operations.
+6. Inspect frontend API integrations.
+7. Verify Phase 1 authentication and authorization.
+8. Identify existing migrations.
+9. Identify existing database records.
+10. Identify existing SQLite and PostgreSQL configurations.
+
+Verify that the security changes from Phase 1 are functioning.
+
+If Phase 1 has unresolved critical vulnerabilities, report them and stop before implementing database changes that depend on insecure identity handling.
+
+Create a Git checkpoint and database backup before modifications.
+
+==================================================
+2. IMPLEMENT COURSE ENROLLMENT DATABASE MODEL
+==================================================
+
+The audit identified that course enrollment and progress are stored in browser localStorage instead of the backend.
+
+This must be corrected.
+
+Create a proper SQLAlchemy CourseEnrollment model.
+
+Required
+<truncated 10076 bytes>
+orced.
+9. Offline attendance cannot be assigned to another user.
+10. Database migrations execute successfully.
+11. Existing authentication and RBAC remain functional.
+12. Backend and frontend integration tests pass.
+13. No critical data integrity failures remain.
+
+==================================================
+14. FINAL IMPLEMENTATION REPORT
+==================================================
+
+After finishing, provide:
+
+A. Summary of implemented functionality.
+
+B. Database tables created or modified.
+
+C. Entity relationship diagram showing the updated database.
+
+D. New and modified API endpoints.
+
+E. Files created and modified with exact paths.
+
+F. Migration details and commands.
+
+G. Existing data preservation results.
+
+H. Automated test results.
+
+I. Failed tests and unresolved issues.
+
+J. Performance implications.
+
+K. Remaining database and integration risks.
+
+L. Updated project health assessment.
+
+M. Recommended next phase.
+
+Be honest about incomplete work.
+
+Do not mark untested features as completed.
+
+Do not automatically start Phase 3.
+
+STOP after delivering the complete Phase 2 report and wait for my approval.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-04T22:59:43+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\scratch\patch_face_test.py (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 101
+Other open documents:
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\CoopSyncAI\PROGRESS.md (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\CoopSyncAI\INTERVIEW_QUESTIONS_SHORT.txt (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\CoopSyncAI\INTERVIEW_QUESTIONS.txt (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\.git\COMMIT_EDITMSG (LANGUAGE_UNSPECIFIED)
+- c:\Users\priya\OneDrive\Documents\GitHub\face-recognition-system\.gitignore (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>
